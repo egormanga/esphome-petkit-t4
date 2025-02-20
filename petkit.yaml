@@ -1,0 +1,837 @@
+# Petkit T4 ESPHome Firmware
+
+
+dashboard_import:
+  package_import_url: github://egormanga/esphome-petkit-t4/petkit.yml
+
+esphome:
+  name: petkit-t4
+  friendly_name: Petkit T4
+  project:
+    name: egormanga.esphome-petkit-t4
+    version: 0.1.0
+  platformio_options:
+    board_upload.maximum_size: 0x800000
+  #on_boot:
+    #- lambda: uart_set_pin(UART_NUM_1, 25, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    #- lambda: esp_wifi_set_protocol(WIFI_IF_STA, (WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G));
+
+external_components:
+  - source: ./components
+  - source: github://egormanga/esphome-bm8563
+
+esp32:
+  board: esp32dev
+  flash_size: 8MB
+
+wifi:
+  id: wifi_
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+  ap:
+    ssid: !secret ap_ssid
+    password: !secret ap_password
+  power_save_mode: none
+  #output_power: 20dB
+  on_connect:
+    rtttl.play: ':d=4,o=5,b=100:16e6,16g6'
+  on_disconnect:
+    rtttl.play: ':d=4,o=5,b=100:16g6,16e6'
+
+captive_portal:
+
+#esp32_improv:
+#  authorizer: none
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+  on_state_change:
+    - pkt4_mcu.motor:
+        motor: drum
+        mode: stop
+    - globals.set:
+        id: ota_state
+        value: !lambda return state;
+    - component.update: oled
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+logger:
+  hardware_uart: UART1
+  baud_rate: 0  # disable
+
+uart:
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 115200
+  debug:
+    direction: TX
+    after:
+      bytes: 0x100
+      timeout: 10ms
+    sequence:
+      lambda: UARTDebug::log_hex(direction, bytes, ' ');
+
+power_supply:
+  - id: vreg_display
+    pin:
+      number: GPIO2
+      ignore_strapping_warning: true
+    enable_on_boot: true
+
+  - id: vreg_bus
+    pin: GPIO26
+    enable_on_boot: true
+
+  - id: vreg_bus_rev2
+    pin: GPIO27
+    enable_on_boot: true
+
+output:
+  - platform: ledc
+    id: beeper
+    pin: GPIO16
+
+i2c:
+  sda:
+    number: GPIO15
+    ignore_strapping_warning: true
+  scl: GPIO4
+  scan: false
+
+spi:
+  mosi_pin: GPIO23
+  clk_pin: GPIO18
+
+time:
+  - platform: bm8563
+
+  - platform: homeassistant
+    on_time_sync:
+      bm8563.write_time:
+
+rtttl:
+  output: beeper
+  gain: 50%  # PWM duty
+
+substitutions:
+  ap_ssid: !secret ap_ssid
+  ap_password: !secret ap_password
+
+qr_code:
+  id: qrcode_ap
+  value: "WIFI:S:${ap_ssid};T:WPA;P:${ap_password};;"
+
+font:
+  id: font_weight
+  file:
+    type: gfonts
+    family: Ubuntu Mono
+  size: 48
+
+image:
+  - id: icon_logo
+    file: mdi:inbox
+    resize: 96x96
+  - id: icon_clean
+    file: mdi:recycle
+    resize: 96x96
+  - id: icon_maintenance
+    file: mdi:progress-wrench
+    resize: 96x96
+  - id: icon_level
+    file: mdi:spirit-level
+    resize: 96x96
+  - id: icon_tray
+    file: mdi:stack-overflow
+    resize: 96x96
+  - id: icon_problem
+    file: mdi:alert
+    resize: 96x96
+  - id: icon_ota
+    file: mdi:progress-download
+    resize: 96x96
+  - id: icon_weight
+    file: mdi:weight-kilogram
+    resize: 64x64
+
+display:
+  platform: ssd1306_spi
+  id: oled
+  model: 'SH1107 128x128'
+  cs_pin:
+    number: GPIO5
+    ignore_strapping_warning: true
+  dc_pin: GPIO19
+  reset_pin: GPIO17
+  data_rate: 40MHz  # max
+  external_vcc: true
+  #power_supply: vreg_oled_bias
+  rotation: 180°
+  update_interval: 0.01s
+  lambda: |-
+    static uint16_t clip = 0;
+
+    if (id(ota_state)) it.image(it.get_width()/2, it.get_height()/2, id(icon_ota), ImageAlign::CENTER);
+    else if (id(clean).state || (id(maintenance).state && id(pet_weight).state < 0.1f) || id(level_needed)) {
+      BaseImage *icon;
+      if (id(clean).state) icon = id(icon_clean);
+      else if (id(maintenance).state) icon = id(icon_maintenance);
+      else if (id(level_needed)) icon = id(icon_level);
+      else return;  // wtf
+
+      it.start_clipping((it.get_width() - icon->get_width())/2 + (clip<icon->get_width()?clip:0), 0, clip>=icon->get_width()?((it.get_width() - icon->get_width())/2 + max(0, clip-icon->get_width())):it.get_width(), it.get_height());
+      if ((clip += 2) > icon->get_width()*2) clip = 0;
+
+      it.image(it.get_width()/2, it.get_height()/2, id(icon_clean), ImageAlign::CENTER);
+      return;
+    } else if (id(pet_weight).state > 0.01f) {
+      it.image(it.get_width()/2, (it.get_height() - id(icon_weight).get_height())/2, id(icon_weight), ImageAlign::CENTER);
+      it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.2f", id(pet_weight).state);
+    } else if (id(cover).state || id(bin).state || id(approach).state) {
+      it.image(it.get_width()/2, it.get_height()/2, id(icon_problem), ImageAlign::CENTER);
+    } else if (id(tray).state) {
+      it.image(it.get_width()/2, it.get_height()/2, id(icon_tray), ImageAlign::CENTER);
+    } else if (id(sensor_uptime).state < 10) {
+      it.image(it.get_width()/2, it.get_height()/2, id(icon_logo), ImageAlign::CENTER);
+    } else if (!id(wifi_).is_connected()) {
+      static uint8_t ii = 0;
+      uint8_t scale = (min(it.get_width(), it.get_height()) / id(qrcode_ap).get_size());
+      it.qr_code((++ii/8 % (it.get_width() - id(qrcode_ap).get_size()*scale)), (ii/8 / (it.get_height() - id(qrcode_ap).get_size()*scale)), id(qrcode_ap), COLOR_ON, scale);
+    }
+
+    clip = 0;
+
+globals:
+  - id: weight_zero
+    type: int
+    initial_value: '7975680'
+    restore_value: true
+
+  - id: weight_scale
+    type: float
+    initial_value: '-1/65536.f'
+    restore_value: true
+
+  - id: litter_mass
+    type: float
+    restore_value: true
+
+  - id: waste_collected
+    type: float
+    restore_value: true
+
+  - id: level_needed
+    type: bool
+
+  - id: ota_state
+    type: int
+
+pkt4_mcu:
+
+sensor:
+  - platform: pkt4_mcu
+    distance:
+      name: Distance
+      entity_category: diagnostic
+      filters:
+        - calibrate_polynomial:
+            degree: 3
+            datapoints:
+              - 8192 -> 0
+              - 1024 -> 1
+              - 256 -> 5
+              - 32 -> 10
+              #- 31 -> inf
+        - clamp:
+            max_value: 10
+        - delta: 0.5
+    weight:
+      id: weight
+      name: Weight
+      icon: mdi:scale
+      entity_category: diagnostic
+      filters:
+        - offset: !lambda return -id(weight_zero);
+        - multiply: !lambda return id(weight_scale);
+        - delta: 0.005
+      on_value_range:
+        above: 2
+        then:
+          if:
+            condition:
+              switch.is_on: maintenance
+            then:
+              rtttl.play: ':d=4,o=5,b=100:32g6,32g6'
+
+  - platform: template
+    id: pet_weight
+    name: Pet Weight
+    icon: mdi:paw
+    unit_of_measurement: kg
+    device_class: weight
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: 1s
+    lambda: return (id(weight).state - id(litter_mass) - id(waste_collected));
+    filters:
+      - clamp:
+          min_value: 0
+
+  - platform: template
+    name: Litter Mass
+    icon: mdi:bucket
+    unit_of_measurement: g
+    device_class: weight
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: return id(litter_mass)*1000;
+    filters:
+      - clamp:
+          min_value: 0
+
+  - platform: template
+    name: Waste Collected
+    icon: mdi:liquid-spot
+    unit_of_measurement: g
+    device_class: weight
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: return id(waste_collected)*1000;
+    filters:
+      - clamp:
+          min_value: 0
+
+  - platform: adc
+    name: 3V3
+    entity_category: diagnostic
+    pin: GPIO32
+    attenuation: 12dB
+    filters:
+      multiply: 16
+
+  - platform: pulse_counter
+    id: mcu_interrupts
+    pin:
+      number: GPIO22
+      allow_other_uses: true
+    internal_filter: 0s
+    total:
+      name: MCU Interrupts
+      entity_category: diagnostic
+      disabled_by_default: true
+
+  - platform: uptime
+    id: sensor_uptime
+    name: Uptime
+    icon: mdi:clock-start
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: pkt4_mcu
+    approach:
+      id: approach
+      name: Approach
+      entity_category: diagnostic
+      on_press:
+        pkt4_mcu.motor:
+          motor: drum
+          mode: stop
+      on_release:
+        script.execute: level_if_needed
+    bin:
+      id: bin
+      name: Bin
+      entity_category: diagnostic
+      on_press:
+        - pkt4_mcu.motor:
+           motor: tray
+           mode: stop
+        - if:
+            all:
+              - binary_sensor.is_off: cover
+              - binary_sensor.is_off: tray
+            then:
+              pkt4_mcu.motor:
+                motor: tray
+                direction: open
+                speed: 50
+                mode: time
+                timeout: 80
+      on_release:
+        script.execute: level_if_needed
+    cover:
+      id: cover
+      name: Cover
+      entity_category: diagnostic
+      on_press:
+        - pkt4_mcu.motor:
+            motor: drum
+            mode: stop
+        - pkt4_mcu.motor:
+            motor: tray
+            mode: stop
+      on_release:
+        script.execute: level_if_needed
+    drum_up:
+      id: drum_up
+      name: Drum Up
+      entity_category: diagnostic
+      on_press:
+        - pkt4_mcu.motor:
+            motor: drum
+            mode: stop
+        - switch.turn_off: motor_drum_up # XXX
+        - globals.set:
+            id: waste_collected
+            value: !lambda return (id(weight).state - id(litter_mass));
+        - script.execute: level_if_needed
+    drum_down:
+      id: drum_down
+      name: Drum Down
+      entity_category: diagnostic
+      on_press:
+        - pkt4_mcu.motor:
+            motor: drum
+            mode: stop
+        - switch.turn_off: motor_drum_down # XXX
+        - switch.turn_off: clean
+        - if:
+            condition:
+              switch.is_on: maintenance
+            then:
+              switch.turn_off: maintenance
+        - globals.set:
+            id: level_needed
+            value: 'true'
+        - if:
+            condition:
+              binary_sensor.is_off: cover
+            then:
+              pkt4_mcu.motor:
+                motor: drum
+                direction: up
+                speed: 100
+                mode: time
+                timeout: 150
+    drum_level:
+      id: drum_level
+      name: Drum Level
+      entity_category: diagnostic
+      on_press:
+        globals.set:
+          id: level_needed
+          value: 'true'
+      on_release:
+        - if:
+            condition:
+              lambda: return id(level_needed);
+            then:
+              - pkt4_mcu.motor:
+                  motor: drum
+                  mode: stop
+              - switch.turn_off: motor_drum_up # XXX
+              - switch.turn_off: motor_drum_down # XXX
+              - if:
+                  all:
+                    - binary_sensor.is_off: cover
+                    - binary_sensor.is_on: tray
+                    - binary_sensor.is_off: bin
+                  then:
+                    pkt4_mcu.motor:
+                      motor: tray
+                      direction: close
+                      speed: 5
+                      mode: time
+                      timeout: 80
+        - globals.set:
+            id: level_needed
+            value: 'false'
+    tray:
+      id: tray
+      name: Tray
+      entity_category: diagnostic
+      on_state:
+        pkt4_mcu.motor:
+          motor: tray
+          mode: stop
+      on_press:
+        if:
+          condition:
+            switch.is_on: clean
+          then:
+            switch.turn_on: clean  # restart
+          else:
+            if:
+              condition:
+                switch.is_on: maintenance
+              then:
+                switch.turn_on: maintenance  # restart
+              else:
+                script.execute: level_if_needed
+
+  - platform: gpio
+    name: Menu Button
+    entity_category: diagnostic
+    pin:
+      number: GPIO34
+      inverted: true
+    on_click:
+      switch.toggle: maintenance
+
+  - platform: gpio
+    name: OK Button
+    entity_category: diagnostic
+    pin:
+      number: GPIO0
+      inverted: true
+      ignore_strapping_warning: true
+    on_click:
+      button.press: level
+
+  - platform: gpio
+    name: MCU
+    entity_category: diagnostic
+    disabled_by_default: true
+    pin:
+      number: GPIO22
+      allow_other_uses: true
+
+button:
+  - platform: template
+    id: level
+    name: Level
+    icon: mdi:spirit-level
+    on_press:
+      - globals.set:
+          id: level_needed
+          value: 'true'
+      - if:
+          condition:
+            switch.is_off: clean
+          then:
+            script.execute: level_if_needed
+
+  - platform: template
+    name: Weight Calibration Zero
+    icon: mdi:scale-balance
+    entity_category: config
+    on_press:
+      globals.set:
+        id: weight_zero
+        value: !lambda return id(weight).raw_state;
+
+  - platform: restart
+    name: Restart
+    entity_category: diagnostic
+
+  - platform: safe_mode
+    name: Restart Safe Mode
+    entity_category: diagnostic
+    disabled_by_default: true
+
+  - platform: factory_reset
+    name: Factory Reset
+    entity_category: config
+    disabled_by_default: true
+
+switch:
+  - platform: template
+    id: clean
+    name: Clean
+    icon: mdi:recycle
+    optimistic: true
+    restore_mode: disabled
+    turn_on_action:
+      if:
+        all:
+          - switch.is_off: maintenance
+          - binary_sensor.is_off: approach
+          - binary_sensor.is_off: cover
+          - binary_sensor.is_off: drum_up
+          - binary_sensor.is_off: bin
+        then:
+          if:
+            all:
+              - binary_sensor.is_off: cover
+              - binary_sensor.is_off: tray
+            then:
+              pkt4_mcu.motor:
+                motor: tray
+                direction: open
+                speed: 50
+                mode: time
+                timeout: 80
+            else:
+              - script.stop: clean_if_needed
+              - globals.set:
+                  id: level_needed
+                  value: 'true'
+              - pkt4_mcu.motor:
+                  motor: drum
+                  direction: up
+                  speed: 100
+                  mode: time
+                  timeout: 1000
+        else:
+          - delay: 0s  # yield
+          - switch.turn_off: clean
+    turn_off_action:
+      pkt4_mcu.motor:
+        motor: drum
+        mode: stop
+
+  - platform: template
+    id: maintenance
+    name: Maintenance
+    icon: mdi:progress-wrench
+    optimistic: true
+    restore_mode: disabled
+    turn_on_action:
+      if:
+        all:
+          - switch.is_off: clean
+          - binary_sensor.is_off: cover
+          - binary_sensor.is_off: drum_up
+          - binary_sensor.is_off: drum_level
+        then:
+          - globals.set:
+              id: level_needed
+              value: 'true'
+          - if:
+              condition:
+                binary_sensor.is_off: tray
+              then:
+                pkt4_mcu.motor:
+                  motor: tray
+                  direction: open
+                  speed: 50
+                  mode: time
+                  timeout: 80
+              else:
+                pkt4_mcu.motor:
+                  motor: drum
+                  direction: up
+                  speed: 100
+                  mode: time
+                  timeout: 120
+        else:
+          - delay: 0s  # yield
+          - switch.turn_off: maintenance
+    turn_off_action:
+      - pkt4_mcu.motor:
+          motor: drum
+          mode: stop
+      - globals.set:
+          id: waste_collected
+          value: '0'
+      - globals.set:
+          id: litter_mass
+          value: !lambda return (id(weight).state - id(waste_collected));
+      - script.execute: level_if_needed
+
+  - platform: template
+    id: motor_tray
+    name: Tray
+    icon: mdi:stack-overflow
+    entity_category: diagnostic
+    optimistic: false
+    restore_mode: disabled
+    lambda: return id(tray).state;
+    turn_on_action:
+      if:
+        all:
+          - binary_sensor.is_off: cover
+          - binary_sensor.is_off: tray
+        then:
+          pkt4_mcu.motor:
+            motor: tray
+            direction: open
+            speed: 50
+            mode: time
+            timeout: 80
+    turn_off_action:
+      if:
+        all:
+          - binary_sensor.is_off: cover
+          - binary_sensor.is_on: tray
+          - binary_sensor.is_off: bin
+        then:
+          pkt4_mcu.motor:
+            motor: tray
+            direction: close
+            speed: 5
+            mode: time
+            timeout: 80
+
+  - platform: template
+    id: motor_drum_down
+    name: Drum Down
+    icon: mdi:image-filter-black-white
+    entity_category: diagnostic
+    optimistic: true
+    restore_mode: disabled
+    turn_on_action:
+      if:
+        all:
+          - binary_sensor.is_off: approach
+          - binary_sensor.is_off: cover
+          - binary_sensor.is_off: drum_down
+          - binary_sensor.is_off: bin
+        then:
+          - globals.set:
+              id: level_needed
+              value: 'true'
+          - pkt4_mcu.motor:
+              motor: drum
+              direction: down
+              speed: 100
+              mode: time
+              timeout: 1000
+        else:
+          - delay: 0s  # yield
+          - switch.turn_off: motor_drum_down
+    turn_off_action:
+      pkt4_mcu.motor:
+        motor: drum
+        mode: stop
+
+  - platform: template
+    id: motor_drum_up
+    name: Drum Up
+    icon: mdi:image-filter-black-white
+    entity_category: diagnostic
+    optimistic: true
+    restore_mode: disabled
+    turn_on_action:
+      if:
+        all:
+          - binary_sensor.is_off: approach
+          - binary_sensor.is_off: cover
+          - binary_sensor.is_off: drum_up
+          - binary_sensor.is_off: bin
+        then:
+          pkt4_mcu.motor:
+            motor: drum
+            direction: up
+            speed: 100
+            mode: time
+            timeout: 1000
+        else:
+          - delay: 0s  # yield
+          - switch.turn_off: motor_drum_up
+    turn_off_action:
+      pkt4_mcu.motor:
+        motor: drum
+        mode: stop
+
+number:
+  - platform: template
+    name: Weight Calibration
+    icon: mdi:scale-balance
+    entity_category: config
+    min_value: 0
+    max_value: 10
+    step: 0.01
+    initial_value: NaN
+    update_interval: never
+    set_action:
+      - globals.set:
+          id: weight_scale
+          value: !lambda return ((float)x / (id(weight).raw_state - id(weight_zero)));
+
+script:
+  - id: level_if_needed
+    then:
+      - delay: 0s  # yield
+      - if:
+          condition:
+            lambda: return id(level_needed);
+          then:
+            if:
+              all:
+                - binary_sensor.is_off: cover
+                - binary_sensor.is_off: tray
+              then:
+                pkt4_mcu.motor:
+                  motor: tray
+                  direction: open
+                  speed: 50
+                  mode: time
+                  timeout: 80
+              else:
+                if:
+                  all:
+                    - binary_sensor.is_off: cover
+                    - binary_sensor.is_off: drum_down
+                    - binary_sensor.is_off: bin
+                    - binary_sensor.is_on: tray
+                    - switch.is_off: maintenance
+                  then:
+                    - globals.set:
+                        id: level_needed
+                        value: 'false'  # pass the level
+                    - pkt4_mcu.motor:
+                        motor: drum
+                        direction: down
+                        speed: 100
+                        mode: time
+                        timeout: 1000
+                  else:
+                    script.execute: clean_if_needed
+          else:
+            if:
+              all:
+                - switch.is_off: clean
+                - switch.is_off: maintenance
+                - binary_sensor.is_off: cover
+                - binary_sensor.is_on: tray
+                - binary_sensor.is_off: bin
+              then:
+                pkt4_mcu.motor:
+                  motor: tray
+                  direction: close
+                  speed: 5
+                  mode: time
+                  timeout: 80
+              else:
+                if:
+                  all:
+                    - switch.is_on: clean
+                    - binary_sensor.is_off: cover
+                    - binary_sensor.is_off: drum_down
+                    - binary_sensor.is_off: bin
+                    - binary_sensor.is_on: tray
+                    - switch.is_off: maintenance
+                  then:
+                    - globals.set:
+                        id: level_needed
+                        value: 'false'  # pass the level
+                    - pkt4_mcu.motor:
+                        motor: drum
+                        direction: down
+                        speed: 100
+                        mode: time
+                        timeout: 1000
+
+  - id: clean_if_needed
+    mode: restart
+    then:
+      - delay: 1min
+      - if:
+          all:
+            - switch.is_off: clean
+            - switch.is_off: maintenance
+            - lambda: return id(pet_weight).state > 0.01f;  # actually, non-dumped waste
+          then:
+            switch.turn_on: clean
+
+
+# by Sdore, 2024-25
+#   www.sdore.me
