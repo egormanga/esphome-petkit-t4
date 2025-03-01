@@ -70,10 +70,6 @@ async def to_code(config):
 		sens = await binary_sensor.new_binary_sensor(drum_down_config)
 		cg.add(var.set_drum_down_sensor(sens))
 
-	if approach_config := config.get(CONF_APPROACH):
-		sens = await binary_sensor.new_binary_sensor(approach_config)
-		cg.add(var.set_approach_sensor(sens))
-
 	if bin_config := config.get(CONF_BIN):
 		sens = await binary_sensor.new_binary_sensor(bin_config)
 		cg.add(var.set_bin_sensor(sens))
@@ -81,3 +77,7 @@ async def to_code(config):
 	if drum_level_config := config.get(CONF_DRUM_LEVEL):
 		sens = await binary_sensor.new_binary_sensor(drum_level_config)
 		cg.add(var.set_drum_level_sensor(sens))
+
+	if approach_config := config.get(CONF_APPROACH):
+		sens = await binary_sensor.new_binary_sensor(approach_config)
+		cg.add(var.set_approach_sensor(sens))

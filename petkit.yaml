@@ -1,6 +1,5 @@
 # Petkit T4 ESPHome Firmware
 
-
 dashboard_import:
   package_import_url: github://egormanga/esphome-petkit-t4/petkit.yml
 
@@ -9,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.1.0
+    version: 0.2.0
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -149,6 +148,9 @@ image:
   - id: icon_tray
     file: mdi:stack-overflow
     resize: 96x96
+  - id: icon_auto_clean
+    file: mdi:recycle-variant
+    resize: 96x96
   - id: icon_problem
     file: mdi:alert
     resize: 96x96
@@ -179,7 +181,8 @@ display:
     if (id(ota_state)) it.image(it.get_width()/2, it.get_height()/2, id(icon_ota), ImageAlign::CENTER);
     else if (id(clean).state || (id(maintenance).state && id(pet_weight).state < 0.1f) || id(level_needed)) {
       BaseImage *icon;
-      if (id(clean).state) icon = id(icon_clean);
+      if (id(approach).state) icon = id(icon_problem);
+      else if (id(clean).state) icon = id(icon_clean);
       else if (id(maintenance).state) icon = id(icon_maintenance);
       else if (id(level_needed)) icon = id(icon_level);
       else return;  // wtf
@@ -187,8 +190,10 @@ display:
       it.start_clipping((it.get_width() - icon->get_width())/2 + (clip<icon->get_width()?clip:0), 0, clip>=icon->get_width()?((it.get_width() - icon->get_width())/2 + max(0, clip-icon->get_width())):it.get_width(), it.get_height());
       if ((clip += 2) > icon->get_width()*2) clip = 0;
 
-      it.image(it.get_width()/2, it.get_height()/2, id(icon_clean), ImageAlign::CENTER);
+      it.image(it.get_width()/2, it.get_height()/2, icon, ImageAlign::CENTER);
       return;
+    } else if (id(clean_if_needed).is_running() && millis() % 5000 < 2000) {
+      it.image(it.get_width()/2, it.get_height()/2, id(icon_auto_clean), ImageAlign::CENTER);
     } else if (id(pet_weight).state > 0.01f) {
       it.image(it.get_width()/2, (it.get_height() - id(icon_weight).get_height())/2, id(icon_weight), ImageAlign::CENTER);
       it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.2f", id(pet_weight).state);
@@ -222,6 +227,10 @@ globals:
     restore_value: true
 
   - id: waste_collected
+    type: float
+    restore_value: true
+
+  - id: litter_discarded
     type: float
     restore_value: true
 
@@ -279,8 +288,8 @@ sensor:
     update_interval: 1s
     lambda: return (id(weight).state - id(litter_mass) - id(waste_collected));
     filters:
-      - clamp:
-          min_value: 0
+      clamp:
+        min_value: 0
 
   - platform: template
     name: Litter Mass
@@ -292,8 +301,8 @@ sensor:
     update_interval: 1s
     lambda: return id(litter_mass)*1000;
     filters:
-      - clamp:
-          min_value: 0
+      clamp:
+        min_value: 0
 
   - platform: template
     name: Waste Collected
@@ -305,8 +314,21 @@ sensor:
     update_interval: 1s
     lambda: return id(waste_collected)*1000;
     filters:
-      - clamp:
-          min_value: 0
+      clamp:
+        min_value: 0
+
+  - platform: template
+    name: Litter Discarded
+    icon: mdi:delete-variant
+    unit_of_measurement: kg
+    device_class: weight
+    state_class: total_increasing
+    accuracy_decimals: 2
+    update_interval: 1s
+    lambda: return id(litter_discarded);
+    filters:
+      clamp:
+        min_value: 0
 
   - platform: adc
     name: 3V3
@@ -339,12 +361,23 @@ binary_sensor:
       id: approach
       name: Approach
       entity_category: diagnostic
+      filters:
+        delayed_off: 5s
       on_press:
-        pkt4_mcu.motor:
-          motor: drum
-          mode: stop
+        - pkt4_mcu.motor:
+            motor: drum
+            mode: stop
+        - if:
+            all:
+              - switch.is_off: clean
+              - switch.is_off: maintenance
+              - binary_sensor.is_on: drum_level
+            then:
+              globals.set:
+                id: level_needed
+                value: 'true'
       on_release:
-        script.execute: level_if_needed
+        script.execute: auto_clean
     bin:
       id: bin
       name: Bin
@@ -453,6 +486,7 @@ binary_sensor:
         - globals.set:
             id: level_needed
             value: 'false'
+        - script.execute: auto_clean
     tray:
       id: tray
       name: Tray
@@ -475,6 +509,8 @@ binary_sensor:
                 switch.turn_on: maintenance  # restart
               else:
                 script.execute: level_if_needed
+      on_release:
+        output.turn_off: beeper  # failsafe
 
   - platform: gpio
     name: Menu Button
@@ -570,6 +606,12 @@ switch:
                 timeout: 80
             else:
               - script.stop: clean_if_needed
+              - output.ledc.set_frequency:
+                  id: beeper
+                  frequency: 40kHz
+              - output.set_level:
+                  id: beeper
+                  level: 50%
               - globals.set:
                   id: level_needed
                   value: 'true'
@@ -583,9 +625,10 @@ switch:
           - delay: 0s  # yield
           - switch.turn_off: clean
     turn_off_action:
-      pkt4_mcu.motor:
-        motor: drum
-        mode: stop
+      - pkt4_mcu.motor:
+          motor: drum
+          mode: stop
+      - output.turn_off: beeper
 
   - platform: template
     id: maintenance
@@ -598,9 +641,16 @@ switch:
         all:
           - switch.is_off: clean
           - binary_sensor.is_off: cover
+          - binary_sensor.is_off: bin
           - binary_sensor.is_off: drum_up
           - binary_sensor.is_off: drum_level
         then:
+          - globals.set:
+              id: litter_discarded
+              value: !lambda return (id(litter_discarded) + (id(litter_mass) - id(weight).state));
+          - globals.set:
+              id: litter_mass
+              value: !lambda return id(weight).state;
           - globals.set:
               id: level_needed
               value: 'true'
@@ -611,7 +661,7 @@ switch:
                 pkt4_mcu.motor:
                   motor: tray
                   direction: open
-                  speed: 50
+                  speed: 100
                   mode: time
                   timeout: 80
               else:
@@ -646,9 +696,8 @@ switch:
     lambda: return id(tray).state;
     turn_on_action:
       if:
-        all:
-          - binary_sensor.is_off: cover
-          - binary_sensor.is_off: tray
+        condition:
+          binary_sensor.is_off: cover
         then:
           pkt4_mcu.motor:
             motor: tray
@@ -660,7 +709,6 @@ switch:
       if:
         all:
           - binary_sensor.is_off: cover
-          - binary_sensor.is_on: tray
           - binary_sensor.is_off: bin
         then:
           pkt4_mcu.motor:
@@ -776,7 +824,7 @@ script:
                   then:
                     - globals.set:
                         id: level_needed
-                        value: 'false'  # pass the level
+                        value: 'false'  # go past the level
                     - pkt4_mcu.motor:
                         motor: drum
                         direction: down
@@ -790,6 +838,7 @@ script:
               all:
                 - switch.is_off: clean
                 - switch.is_off: maintenance
+                - binary_sensor.is_off: drum_level
                 - binary_sensor.is_off: cover
                 - binary_sensor.is_on: tray
                 - binary_sensor.is_off: bin
@@ -812,7 +861,7 @@ script:
                   then:
                     - globals.set:
                         id: level_needed
-                        value: 'false'  # pass the level
+                        value: 'false'  # go past the level
                     - pkt4_mcu.motor:
                         motor: drum
                         direction: down
@@ -829,9 +878,23 @@ script:
             - switch.is_off: clean
             - switch.is_off: maintenance
             - lambda: return id(pet_weight).state > 0.01f;  # actually, non-dumped waste
+            - lambda: return id(pet_weight).state < 1.00f;  # not the actual pet inside
           then:
             switch.turn_on: clean
 
+  - id: auto_clean
+    then:
+      if:
+        all:
+          - switch.is_off: clean
+          - switch.is_off: maintenance
+          - binary_sensor.is_off: drum_level
+          - lambda: return id(pet_weight).state > 0.01f;  # actually, non-dumped waste
+          - lambda: return id(pet_weight).state < 1.00f;  # not the actual pet inside
+        then:
+          script.execute: clean_if_needed
+        else:
+          script.execute: level_if_needed
 
 # by Sdore, 2024-25
 #   www.sdore.me

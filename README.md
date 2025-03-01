@@ -9,6 +9,7 @@ It's able to work completely offline & without HA, although it's recommended to 
 
 - Top (menu) button: Toggle maintenance mode
 - Bottom (ok) button: Level the litter
+- Advanced status displaying
 - Collected waste amount tracking
 - Beep after reaching 2 kg of litter in maintenance mode
 - QR code with a Wi-FI AP connection shortcut
@@ -20,7 +21,7 @@ It's able to work completely offline & without HA, although it's recommended to 
 
 ## Yet to implement
 
-* [ ] Auto cleaning start (a.k.a. non-kitten mode)
+* [x] Auto cleaning start (a.k.a. non-kitten mode)
 * [ ] Pet weight saving
 * [ ] Multiple pets support
 * [ ] Extra unknown packets
@@ -28,6 +29,7 @@ It's able to work completely offline & without HA, although it's recommended to 
 * [ ] Parametrized MCU init
 * [ ] Automated calibration
 * [ ] Dumping the stock calibration data from factory binaries (per-chip)
+* [ ] Weight as additional safety check
 
 
 ## Weight Sensor Calibration
