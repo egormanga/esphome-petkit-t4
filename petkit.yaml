@@ -8,12 +8,13 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.2.0
+    version: 0.3.0
   platformio_options:
     board_upload.maximum_size: 0x800000
-  #on_boot:
+  on_boot:
     #- lambda: uart_set_pin(UART_NUM_1, 25, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     #- lambda: esp_wifi_set_protocol(WIFI_IF_STA, (WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G));
+    pkt4_mcu.init:
 
 external_components:
   - source: ./components
@@ -34,9 +35,9 @@ wifi:
   power_save_mode: none
   #output_power: 20dB
   on_connect:
-    rtttl.play: ':d=4,o=5,b=100:16e6,16g6'
+    rtttl.play: :d=16,o=6,b=100:E,G
   on_disconnect:
-    rtttl.play: ':d=4,o=5,b=100:16g6,16e6'
+    rtttl.play: :d=16,o=6,b=100:G,E
 
 captive_portal:
 
@@ -154,6 +155,9 @@ image:
   - id: icon_problem
     file: mdi:alert
     resize: 96x96
+  - id: icon_tray_full
+    file: mdi:tray-full
+    resize: 96x96
   - id: icon_ota
     file: mdi:progress-download
     resize: 96x96
@@ -179,7 +183,7 @@ display:
     static uint16_t clip = 0;
 
     if (id(ota_state)) it.image(it.get_width()/2, it.get_height()/2, id(icon_ota), ImageAlign::CENTER);
-    else if (id(clean).state || (id(maintenance).state && id(pet_weight).state < 0.1f) || id(level_needed)) {
+    else if (id(clean).state || (id(maintenance).state && millis() % 5000 < 1500) || id(level_needed)) {
       BaseImage *icon;
       if (id(approach).state) icon = id(icon_problem);
       else if (id(clean).state) icon = id(icon_clean);
@@ -192,11 +196,13 @@ display:
 
       it.image(it.get_width()/2, it.get_height()/2, icon, ImageAlign::CENTER);
       return;
-    } else if (id(clean_if_needed).is_running() && millis() % 5000 < 2000) {
+    } else if (id(tray_full).state && millis() % 5000 < 1000) {
+      it.image(it.get_width()/2, it.get_height()/2, id(icon_tray_full), ImageAlign::CENTER);
+    } else if (id(clean_pending).state && millis() % 5000 < 2000) {
       it.image(it.get_width()/2, it.get_height()/2, id(icon_auto_clean), ImageAlign::CENTER);
-    } else if (id(pet_weight).state > 0.01f) {
+    } else if (id(maintenance).state || id(pet_weight).state > 0.01f) {
       it.image(it.get_width()/2, (it.get_height() - id(icon_weight).get_height())/2, id(icon_weight), ImageAlign::CENTER);
-      it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.2f", id(pet_weight).state);
+      it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.2f", id(maintenance).state?id(weight).state:id(pet_weight).state);
     } else if (id(cover).state || id(bin).state || id(approach).state) {
       it.image(it.get_width()/2, it.get_height()/2, id(icon_problem), ImageAlign::CENTER);
     } else if (id(tray).state) {
@@ -247,6 +253,7 @@ sensor:
     distance:
       name: Distance
       entity_category: diagnostic
+      disabled_by_default: true
       filters:
         - calibrate_polynomial:
             degree: 3
@@ -264,6 +271,7 @@ sensor:
       name: Weight
       icon: mdi:scale
       entity_category: diagnostic
+      disabled_by_default: true
       filters:
         - offset: !lambda return -id(weight_zero);
         - multiply: !lambda return id(weight_scale);
@@ -275,7 +283,7 @@ sensor:
             condition:
               switch.is_on: maintenance
             then:
-              rtttl.play: ':d=4,o=5,b=100:32g6,32g6'
+              rtttl.play: :d=32,o=6,b=100:G,64P,G,64P,G
 
   - platform: template
     id: pet_weight
@@ -333,6 +341,7 @@ sensor:
   - platform: adc
     name: 3V3
     entity_category: diagnostic
+    disabled_by_default: true
     pin: GPIO32
     attenuation: 12dB
     filters:
@@ -354,6 +363,7 @@ sensor:
     name: Uptime
     icon: mdi:clock-start
     entity_category: diagnostic
+    disabled_by_default: true
 
 binary_sensor:
   - platform: pkt4_mcu
@@ -364,18 +374,22 @@ binary_sensor:
       filters:
         delayed_off: 5s
       on_press:
-        - pkt4_mcu.motor:
-            motor: drum
-            mode: stop
-        - if:
-            all:
-              - switch.is_off: clean
-              - switch.is_off: maintenance
-              - binary_sensor.is_on: drum_level
-            then:
-              globals.set:
-                id: level_needed
-                value: 'true'
+        if:
+          condition:
+            switch.is_off: maintenance
+          then:
+            - pkt4_mcu.motor:
+                motor: drum
+                mode: stop
+            - if:
+                all:
+                  - switch.is_off: clean
+                  - switch.is_off: maintenance
+                  - binary_sensor.is_on: drum_level
+                then:
+                  globals.set:
+                    id: level_needed
+                    value: 'true'
       on_release:
         script.execute: auto_clean
     bin:
@@ -383,9 +397,13 @@ binary_sensor:
       name: Bin
       entity_category: diagnostic
       on_press:
-        - pkt4_mcu.motor:
-           motor: tray
-           mode: stop
+        - if:
+            condition:
+              switch.is_off: maintenance
+            then:
+              pkt4_mcu.motor:
+               motor: tray
+               mode: stop
         - if:
             all:
               - binary_sensor.is_off: cover
@@ -398,7 +416,14 @@ binary_sensor:
                 mode: time
                 timeout: 80
       on_release:
-        script.execute: level_if_needed
+        - globals.set:
+            id: waste_collected
+            value: '0'
+        - delay: 5s
+        - globals.set:
+            id: litter_discarded
+            value: !lambda return (id(litter_discarded) + max(0.f, (id(litter_mass) - id(weight).state)));
+        - script.execute: level_if_needed
     cover:
       id: cover
       name: Cover
@@ -512,14 +537,40 @@ binary_sensor:
       on_release:
         output.turn_off: beeper  # failsafe
 
+  - platform: template
+    id: tray_full
+    name: Tray Full
+    icon: mdi:tray-full
+    device_class: problem
+    entity_category: diagnostic
+    lambda: return id(waste_collected) >= 1.00f;
+
+  - platform: template
+    id: clean_pending
+    name: Clean Pending
+    icon: mdi:recycle-variant
+    device_class: running
+    entity_category: diagnostic
+    condition:
+      script.is_running: clean_if_needed
+
   - platform: gpio
     name: Menu Button
     entity_category: diagnostic
     pin:
       number: GPIO34
       inverted: true
-    on_click:
-      switch.toggle: maintenance
+    on_double_click:
+      if:
+        condition:
+          switch.is_off: maintenance
+        then:
+          switch.turn_on: maintenance
+    on_multi_click:
+      timing:
+        - ON for at least 2s
+      then:
+        button.press: reboot
 
   - platform: gpio
     name: OK Button
@@ -529,7 +580,13 @@ binary_sensor:
       inverted: true
       ignore_strapping_warning: true
     on_click:
-      button.press: level
+      if:
+        condition:
+          switch.is_on: maintenance
+        then:
+          switch.turn_off: maintenance
+        else:
+          button.press: level
 
   - platform: gpio
     name: MCU
@@ -538,6 +595,10 @@ binary_sensor:
     pin:
       number: GPIO22
       allow_other_uses: true
+    on_press:  # ready
+      pkt4_mcu.init:
+    on_release:  # reset
+      pkt4_mcu.deinit:
 
 button:
   - platform: template
@@ -565,6 +626,7 @@ button:
 
   - platform: restart
     name: Restart
+    id: reboot
     entity_category: diagnostic
 
   - platform: safe_mode
@@ -646,12 +708,6 @@ switch:
           - binary_sensor.is_off: drum_level
         then:
           - globals.set:
-              id: litter_discarded
-              value: !lambda return (id(litter_discarded) + (id(litter_mass) - id(weight).state));
-          - globals.set:
-              id: litter_mass
-              value: !lambda return id(weight).state;
-          - globals.set:
               id: level_needed
               value: 'true'
           - if:
@@ -679,12 +735,19 @@ switch:
           motor: drum
           mode: stop
       - globals.set:
-          id: waste_collected
-          value: '0'
-      - globals.set:
           id: litter_mass
           value: !lambda return (id(weight).state - id(waste_collected));
       - script.execute: level_if_needed
+
+  - platform: template
+    id: do_auto_clean
+    name: Auto Clean
+    icon: mdi:refresh-auto
+    entity_category: config
+    optimistic: true
+    restore_mode: restore_default_off  # better safe than sorry!
+    on_turn_on:
+      script.execute: auto_clean
 
   - platform: template
     id: motor_tray
@@ -781,6 +844,19 @@ switch:
 
 number:
   - platform: template
+    id: clean_after
+    name: Clean After
+    icon: mdi:cookie-clock-outline
+    entity_category: config
+    unit_of_measurement: min
+    min_value: 1
+    max_value: 60
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1
+
+  - platform: template
     name: Weight Calibration
     icon: mdi:scale-balance
     entity_category: config
@@ -790,9 +866,9 @@ number:
     initial_value: NaN
     update_interval: never
     set_action:
-      - globals.set:
-          id: weight_scale
-          value: !lambda return ((float)x / (id(weight).raw_state - id(weight_zero)));
+      globals.set:
+        id: weight_scale
+        value: !lambda return ((float)x / (id(weight).raw_state - id(weight_zero)));
 
 script:
   - id: level_if_needed
@@ -872,7 +948,7 @@ script:
   - id: clean_if_needed
     mode: restart
     then:
-      - delay: 1min
+      - delay: !lambda return id(clean_after).state*60000;
       - if:
           all:
             - switch.is_off: clean
@@ -886,9 +962,11 @@ script:
     then:
       if:
         all:
+          - switch.is_on: do_auto_clean
           - switch.is_off: clean
           - switch.is_off: maintenance
           - binary_sensor.is_off: drum_level
+          - binary_sensor.is_off: tray_full
           - lambda: return id(pet_weight).state > 0.01f;  # actually, non-dumped waste
           - lambda: return id(pet_weight).state < 1.00f;  # not the actual pet inside
         then:

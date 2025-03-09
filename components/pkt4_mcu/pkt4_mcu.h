@@ -37,6 +37,8 @@ class PKT4MCUComponent: public Component, public uart::UARTDevice {
 		void set_drum_level_sensor(binary_sensor::BinarySensor *drum_level_sensor) { this->drum_level_sensor_ = drum_level_sensor; }
 		void set_tray_sensor(binary_sensor::BinarySensor *tray_sensor) { this->tray_sensor_ = tray_sensor; }
 
+		void init(void);
+		void deinit(void);
 		void motor(uint8_t motor, uint8_t mode, uint8_t direction, uint8_t speed, uint16_t duration, uint16_t timeout);
 
 	protected:
@@ -57,6 +59,16 @@ class PKT4MCUComponent: public Component, public uart::UARTDevice {
 		                            *tray_sensor_{nullptr};
 
 		void send_(uint8_t pid, uint8_t payload[], uint8_t len);
+};
+
+template<typename... Ts> class InitAction: public Action<Ts...>, public Parented<PKT4MCUComponent> {
+	public:
+		void play(Ts... x) override { this->parent_->init(); }
+};
+
+template<typename... Ts> class DeinitAction: public Action<Ts...>, public Parented<PKT4MCUComponent> {
+	public:
+		void play(Ts... x) override { this->parent_->deinit(); }
 };
 
 template<typename... Ts> class MotorAction: public Action<Ts...>, public Parented<PKT4MCUComponent> {

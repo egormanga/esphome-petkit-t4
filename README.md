@@ -1,5 +1,8 @@
 # Petkit T4 ESPHome Firmware
 
+https://github.com/user-attachments/assets/c50be11d-95dd-4898-9601-6adc21f130d6/#Firmware.Dreams.mp4
+
+
 **Custom.** Fully replaces the stock firmware while introducing some extra neat features, as well as native Home Assistant integration.
 
 It's able to work completely offline & without HA, although it's recommended to calibrate the load cell weight sensor before use.
@@ -7,12 +10,12 @@ It's able to work completely offline & without HA, although it's recommended to 
 
 ## Extra features added
 
-- Top (menu) button: Toggle maintenance mode
-- Bottom (ok) button: Level the litter
+- Top (menu) button: Maintenance mode / Reboot
+- Bottom (ok) button: Maintenance done & Level the litter
 - Advanced status displaying
 - Collected waste amount tracking
 - Beep after reaching 2 kg of litter in maintenance mode
-- QR code with a Wi-FI AP connection shortcut
+- QR code with a Wi-Fi AP connection shortcut
 - Optional [Improv-BLE](https://improv-wifi.com) support
 - Various internal sensors exposed to HA
 - Additional safety checks compared to the stock fw
@@ -48,3 +51,8 @@ It's able to work completely offline & without HA, although it's recommended to 
 - @earlynerd with his [repo](https://github.com/earlynerd/petkit-pura-max-serial-bus) for the pioneering and _enormous_ help in the reverse engineering.
 - @dwyschka for the idea and the upstart (earlynerd/petkit-pura-max-serial-bus#1).
 - My loved girlfriend Sharea & my lovely kitty Xayah for the lots of testing.
+
+
+---
+
+https://github.com/user-attachments/assets/ad489f28-23f9-497a-a08b-c182428b3873/#Petkit.T4.ESPHome.Firmware.mp4

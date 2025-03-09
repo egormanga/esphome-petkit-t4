@@ -9,8 +9,7 @@ static const char *const TAG = "pkt4_mcu";
 
 void PKT4MCUComponent::setup() {
 	ESP_LOGCONFIG(TAG, "Setting up T4 MCU...");
-
-	this->send_(0x9, (uint8_t*)(uint8_t[]){0x80}, 1);
+	this->init();
 }
 
 void PKT4MCUComponent::dump_config() {
@@ -198,6 +197,15 @@ void PKT4MCUComponent::loop() {
 			                  this->packet_.pid, this->packet_.payload[0]);
 		}
 	}
+}
+
+void PKT4MCUComponent::init() {
+	this->send_(0x9, (uint8_t*)(uint8_t[]){0x80}, 1);
+}
+
+void PKT4MCUComponent::deinit() {
+	this->inited_ = false;
+	ESP_LOGW(TAG, "Deinited T4 MCU");
 }
 
 void PKT4MCUComponent::motor(uint8_t motor, uint8_t mode, uint8_t direction, uint8_t speed, uint16_t duration, uint16_t timeout) {
