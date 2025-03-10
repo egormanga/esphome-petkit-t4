@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.3.0
+    version: 0.3.1
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -404,6 +404,10 @@ binary_sensor:
               pkt4_mcu.motor:
                motor: tray
                mode: stop
+            else:
+              globals.set:
+                id: waste_collected
+                value: '0'
         - if:
             all:
               - binary_sensor.is_off: cover
@@ -416,9 +420,6 @@ binary_sensor:
                 mode: time
                 timeout: 80
       on_release:
-        - globals.set:
-            id: waste_collected
-            value: '0'
         - delay: 5s
         - globals.set:
             id: litter_discarded
