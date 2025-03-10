@@ -786,7 +786,7 @@ switch:
   - platform: template
     id: motor_drum_down
     name: Drum Down
-    icon: mdi:image-filter-black-white
+    icon: mdi:horizontal-rotate-counterclockwise
     entity_category: diagnostic
     optimistic: true
     restore_mode: disabled
@@ -818,7 +818,7 @@ switch:
   - platform: template
     id: motor_drum_up
     name: Drum Up
-    icon: mdi:image-filter-black-white
+    icon: mdi:horizontal-rotate-clockwise
     entity_category: diagnostic
     optimistic: true
     restore_mode: disabled
