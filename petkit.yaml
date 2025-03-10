@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.4.0-dev
+    version: 0.4.0
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -35,9 +35,9 @@ wifi:
   power_save_mode: none
   #output_power: 20dB
   on_connect:
-    rtttl.play: :d=16,o=6,b=100:E,G
+    rtttl.play: :d=16,o=6,b=100:e,g
   on_disconnect:
-    rtttl.play: :d=16,o=6,b=100:G,E
+    rtttl.play: :d=16,o=6,b=100:g,e
 
 captive_portal:
 
@@ -240,6 +240,9 @@ globals:
     type: float
     restore_value: true
 
+  - id: cleans_left
+    type: int
+
   - id: level_needed
     type: bool
 
@@ -283,7 +286,7 @@ sensor:
             condition:
               switch.is_on: maintenance
             then:
-              rtttl.play: :d=32,o=6,b=100:G,64P,G,64P,G
+              rtttl.play: :d=32,o=6,b=100:g,64p,g,64p,g
 
   - platform: template
     id: pet_weight
@@ -298,6 +301,18 @@ sensor:
     filters:
       clamp:
         min_value: 0
+    on_value_range:
+      above: !lambda return id(clean_threshold).state/1000.f;  # it's non-dumped waste
+      below: !lambda return id(pet_threshold).state;  # not the actual pet inside
+      then:
+        if:
+          all:
+            - binary_sensor.is_off: pet_inside
+            - lambda: return id(cleans_left) <= 0;
+          then:
+            globals.set:
+              id: cleans_left
+              value: !lambda return id(clean_times).state;
 
   - platform: template
     name: Litter Mass
@@ -337,6 +352,15 @@ sensor:
     filters:
       clamp:
         min_value: 0
+
+  - platform: template
+    name: Cleans Left
+    icon: mdi:counter
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    disabled_by_default: true
+    update_interval: 1s
+    lambda: return id(cleans_left);
 
   - platform: adc
     name: 3V3
@@ -460,7 +484,11 @@ binary_sensor:
             motor: drum
             mode: stop
         - switch.turn_off: motor_drum_down # XXX
-        - switch.turn_off: clean
+        - if:
+            condition:
+              switch.is_on: clean
+            then:
+              switch.turn_off: clean
         - if:
             condition:
               switch.is_on: maintenance
@@ -538,6 +566,17 @@ binary_sensor:
                 script.execute: level_if_needed
       on_release:
         output.turn_off: beeper  # failsafe
+
+  - platform: template
+    id: pet_inside
+    name: Pet Inside
+    icon: mdi:paw
+    device_class: problem
+    entity_category: diagnostic
+    condition:
+      all:
+        - switch.is_off: maintenance
+        - lambda: return id(pet_weight).state >= id(pet_threshold).state;
 
   - platform: template
     id: tray_full
@@ -653,6 +692,7 @@ switch:
         all:
           - switch.is_off: maintenance
           - binary_sensor.is_off: approach
+          - binary_sensor.is_off: pet_inside
           - binary_sensor.is_off: cover
           - binary_sensor.is_off: drum_up
           - binary_sensor.is_off: bin
@@ -860,23 +900,64 @@ number:
     initial_value: 1
 
   - platform: template
+    id: clean_threshold
+    name: Clean Threshold
+    icon: mdi:hydraulic-oil-level
+    entity_category: config
+    unit_of_measurement: g
+    mode: box
+    min_value: 10
+    max_value: 100
+    step: 10
+    optimistic: true
+    restore_value: true
+    initial_value: 25
+
+  - platform: template
+    id: clean_times
+    name: Clean Times
+    icon: mdi:repeat-variant
+    entity_category: config
+    min_value: 1
+    max_value: 5
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 1
+
+  - platform: template
+    id: pet_threshold
+    name: Pet Threshold
+    icon: mdi:paw
+    entity_category: config
+    unit_of_measurement: kg
+    mode: box
+    min_value: 0.10
+    max_value: 10.00
+    step: 0.10
+    optimistic: true
+    restore_value: true
+    initial_value: 1.00
+
+  - platform: template
     id: tray_capacity
     name: Tray Capacity
     icon: mdi:tray-arrow-down
     entity_category: config
     unit_of_measurement: kg
     mode: box
-    min_value: 0.1
-    max_value: 2.0
-    step: 0.1
+    min_value: 0.10
+    max_value: 2.00
+    step: 0.10
     optimistic: true
     restore_value: true
-    initial_value: 1.0
+    initial_value: 1.00
 
   - platform: template
     name: Weight Calibration
     icon: mdi:scale-balance
     entity_category: config
+    mode: box
     min_value: 0
     max_value: 10
     step: 0.01
@@ -970,8 +1051,8 @@ script:
           all:
             - switch.is_off: clean
             - switch.is_off: maintenance
-            - lambda: return id(pet_weight).state > 0.01f;  # actually, non-dumped waste
-            - lambda: return id(pet_weight).state < 1.00f;  # not the actual pet inside
+            - binary_sensor.is_off: pet_inside
+            - lambda: return id(pet_weight).state*1000 > id(clean_threshold).state;
           then:
             switch.turn_on: clean
 
@@ -982,12 +1063,15 @@ script:
           - switch.is_on: do_auto_clean
           - switch.is_off: clean
           - switch.is_off: maintenance
+          - binary_sensor.is_off: pet_inside
           - binary_sensor.is_off: drum_level
           - binary_sensor.is_off: tray_full
-          - lambda: return id(pet_weight).state > 0.01f;  # actually, non-dumped waste
-          - lambda: return id(pet_weight).state < 1.00f;  # not the actual pet inside
+          - lambda: return id(cleans_left) > 0;
         then:
-          script.execute: clean_if_needed
+          - script.execute: clean_if_needed
+          - globals.set:
+              id: cleans_left
+              value: !lambda return id(cleans_left)-1;
         else:
           script.execute: level_if_needed
 
