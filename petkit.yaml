@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.5.0
+    version: 0.5.1
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -280,7 +280,7 @@ sensor:
         - multiply: !lambda return id(weight_scale);
         - delta: 0.005
       on_value_range:
-        above: 2
+        above: !lambda return (id(waste_collected) + 2.f);
         then:
           if:
             condition:
