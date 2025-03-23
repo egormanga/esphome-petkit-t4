@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.4.0
+    version: 0.4.1
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -428,10 +428,6 @@ binary_sensor:
               pkt4_mcu.motor:
                motor: tray
                mode: stop
-            else:
-              globals.set:
-                id: waste_collected
-                value: '0'
         - if:
             all:
               - binary_sensor.is_off: cover
@@ -446,8 +442,14 @@ binary_sensor:
       on_release:
         - delay: 5s
         - globals.set:
+            id: waste_collected
+            value: !lambda return max(0.f, (id(weight).state - id(litter_mass)));
+        - globals.set:
             id: litter_discarded
             value: !lambda return (id(litter_discarded) + max(0.f, (id(litter_mass) - id(weight).state)));
+        - globals.set:
+            id: litter_mass
+            value: !lambda return (id(weight).state - id(waste_collected));
         - script.execute: level_if_needed
     cover:
       id: cover
