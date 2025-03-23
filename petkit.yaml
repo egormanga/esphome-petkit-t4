@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.4.1
+    version: 0.5.0
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -657,6 +657,18 @@ button:
             switch.is_off: clean
           then:
             script.execute: level_if_needed
+
+  - platform: template
+    name: All Litter Removed
+    icon: mdi:delete-empty
+    entity_category: config
+    on_press:
+      - globals.set:
+          id: litter_mass
+          value: '0'
+      - globals.set:
+          id: waste_collected
+          value: !lambda return max(0.f, (id(weight).state - id(litter_mass)));
 
   - platform: template
     name: Weight Calibration Zero
