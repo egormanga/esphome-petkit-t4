@@ -14,7 +14,7 @@ It's able to work completely offline & without HA, although it's recommended to 
 - Bottom (ok) button: Maintenance done & Level the litter
 - Advanced status displaying
 - Collected waste amount tracking
-- Beep after reaching 2 kg of litter in maintenance mode
+- Beep after reaching set amount of litter in maintenance mode
 - QR code with a Wi-Fi AP connection shortcut
 - Optional [Improv-BLE](https://improv-wifi.com) support
 - Various internal sensors exposed to HA
