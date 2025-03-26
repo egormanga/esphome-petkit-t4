@@ -32,7 +32,7 @@ It's able to work completely offline & without HA, although it's recommended to 
 * [ ] Parametrized MCU init
 * [ ] Automated calibration
 * [ ] Dumping the stock calibration data from factory binaries (per-chip)
-* [ ] Weight as additional safety check
+* [x] Weight as additional safety check
 
 
 ## Weight Sensor Calibration
