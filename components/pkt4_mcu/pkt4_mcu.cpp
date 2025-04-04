@@ -32,6 +32,7 @@ void PKT4MCUComponent::loop() {
 
 		if (crc_in != crc_act) {
 			ESP_LOGW(TAG, "CRC mismatch: %04x != %04x", crc_act, crc_in);
+			uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len)), ' ');
 			return;
 		}
 
@@ -41,8 +42,7 @@ void PKT4MCUComponent::loop() {
 		    this->packet_.pid != 0x2 &&
 		    this->packet_.pid != 0x3 &&
 		    this->packet_.pid != 0x7) {
-			ESP_LOGD(TAG, "< %X seq=%u len=%u crc=%04x",
-			         this->packet_.pid, this->packet_.seq, (this->packet_.len - offsetof(MCUPacket, payload) - sizeof(uint16_t)), crc_in);
+			ESP_LOGD(TAG, "< %X seq=%u len=%u crc=%04x", this->packet_.pid, this->packet_.seq, (this->packet_.len - offsetof(MCUPacket, payload) - sizeof(uint16_t)), crc_in);
 
 			uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>(this->packet_.payload, (this->packet_.payload + (this->packet_.len - offsetof(MCUPacket, payload)) - sizeof(uint16_t))), ' ');
 		}
@@ -95,8 +95,7 @@ void PKT4MCUComponent::loop() {
 						if (this->distance_sensor_) this->distance_sensor_->publish_state(data->distance);
 					}; break;
 
-					default: ESP_LOGW(TAG, "Unknown node for %x: %x",
-					                  this->packet_.pid, this->packet_.payload[0]);
+					default: ESP_LOGW(TAG, "Unknown node for %x: %x", this->packet_.pid, this->packet_.payload[0]);
 				}
 			}; break;
 
@@ -118,8 +117,7 @@ void PKT4MCUComponent::loop() {
 						}
 					}; break;
 
-					default: ESP_LOGW(TAG, "Unknown node for %x: %x",
-					                  this->packet_.pid, this->packet_.payload[0]);
+					default: ESP_LOGW(TAG, "Unknown node for %x: %x", this->packet_.pid, this->packet_.payload[0]);
 				}
 			}; break;
 
@@ -188,13 +186,13 @@ void PKT4MCUComponent::loop() {
 						ESP_LOGI(TAG, "Inited ver hw: %d sw: %d", this->hw_ver_, this->sw_ver_);
 					}; break;
 
-					default: ESP_LOGW(TAG, "Unknown node for %x: %x",
-					                  this->packet_.pid, this->packet_.payload[0]);
+					default: ESP_LOGW(TAG, "Unknown node for %x: %x", this->packet_.pid, this->packet_.payload[0]);
 				}
 			}; break;
 
-			default: ESP_LOGW(TAG, "Unknown packet: %x (node %x)",
-			                  this->packet_.pid, this->packet_.payload[0]);
+			default:
+				ESP_LOGW(TAG, "Unknown packet: %x (node %x)", this->packet_.pid, this->packet_.payload[0]);
+				uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len)), ' ');
 		}
 	}
 }
