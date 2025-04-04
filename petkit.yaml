@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.6.1
+    version: 0.6.2
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -1060,29 +1060,31 @@ script:
                   timeout: 80
               else:
                 if:
-                  all:
-                    - or:
-                      - switch.is_on: clean
-                      - lambda: return id(level_needed);
-                    - binary_sensor.is_off: approach
-                    - binary_sensor.is_off: pet_inside
-                    - binary_sensor.is_off: cover
-                    - binary_sensor.is_off: drum_down
-                    - binary_sensor.is_off: bin
-                    - binary_sensor.is_on: tray
-                    - switch.is_off: maintenance
+                  any:
+                    - switch.is_on: clean
+                    - lambda: return id(level_needed);
                   then:
-                    - globals.set:
-                        id: level_needed
-                        value: 'false'  # go past the level
-                    - pkt4_mcu.motor:
-                        motor: drum
-                        direction: down
-                        speed: 100
-                        mode: time
-                        timeout: 1000
-                  else:
-                    script.execute: clean_if_needed  # defer the execution
+                    if:
+                      all:
+                        - binary_sensor.is_off: approach
+                        - binary_sensor.is_off: pet_inside
+                        - binary_sensor.is_off: cover
+                        - binary_sensor.is_off: drum_down
+                        - binary_sensor.is_off: bin
+                        - binary_sensor.is_on: tray
+                        - switch.is_off: maintenance
+                      then:
+                        - globals.set:
+                            id: level_needed
+                            value: 'false'  # go past the level
+                        - pkt4_mcu.motor:
+                            motor: drum
+                            direction: down
+                            speed: 100
+                            mode: time
+                            timeout: 1000
+                      else:
+                        script.execute: clean_if_needed  # defer the execution
 
   - id: clean_if_needed
     mode: restart
