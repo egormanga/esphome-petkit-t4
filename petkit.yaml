@@ -136,33 +136,52 @@ font:
 image:
   - id: icon_logo
     file: mdi:inbox
+    type: binary
     resize: 96x96
+
   - id: icon_clean
     file: mdi:recycle
+    type: binary
     resize: 96x96
+
   - id: icon_maintenance
     file: mdi:progress-wrench
+    type: binary
     resize: 96x96
+
   - id: icon_level
     file: mdi:spirit-level
+    type: binary
     resize: 96x96
+
   - id: icon_tray
     file: mdi:stack-overflow
+    type: binary
     resize: 96x96
+
   - id: icon_auto_clean
     file: mdi:recycle-variant
+    type: binary
     resize: 96x96
+
   - id: icon_problem
     file: mdi:alert
+    type: binary
     resize: 96x96
+
   - id: icon_tray_full
     file: mdi:tray-full
+    type: binary
     resize: 96x96
+
   - id: icon_ota
     file: mdi:progress-download
+    type: binary
     resize: 96x96
+
   - id: icon_weight
     file: mdi:weight-kilogram
+    type: binary
     resize: 64x64
 
 display:
