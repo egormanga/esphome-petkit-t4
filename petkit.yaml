@@ -8,13 +8,14 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.6.0
+    version: 0.6.1
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
     #- lambda: uart_set_pin(UART_NUM_1, 25, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     #- lambda: esp_wifi_set_protocol(WIFI_IF_STA, (WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G));
-    pkt4_mcu.init:
+    - delay: 1min # TODO FIXME
+    - pkt4_mcu.init:
 
 external_components:
   - source: ./components
@@ -950,7 +951,7 @@ number:
     mode: box
     min_value: 10
     max_value: 100
-    step: 10
+    step: 5
     optimistic: true
     restore_value: true
     initial_value: 25
@@ -1029,23 +1030,40 @@ script:
     then:
       - delay: 0s  # yield
       - if:
-          condition:
-            lambda: return id(level_needed);
+          all:
+            - lambda: return id(level_needed);
+            - binary_sensor.is_off: cover
+            - binary_sensor.is_off: tray
           then:
+            pkt4_mcu.motor:
+              motor: tray
+              direction: open
+              speed: 50
+              mode: time
+              timeout: 80
+          else:
             if:
               all:
+                - lambda: return (!id(level_needed));
+                - switch.is_off: clean
+                - switch.is_off: maintenance
+                - binary_sensor.is_off: drum_level
                 - binary_sensor.is_off: cover
-                - binary_sensor.is_off: tray
+                - binary_sensor.is_on: tray
+                - binary_sensor.is_off: bin
               then:
                 pkt4_mcu.motor:
                   motor: tray
-                  direction: open
-                  speed: 50
+                  direction: close
+                  speed: 5
                   mode: time
                   timeout: 80
               else:
                 if:
                   all:
+                    - or:
+                      - switch.is_on: clean
+                      - lambda: return id(level_needed);
                     - binary_sensor.is_off: approach
                     - binary_sensor.is_off: pet_inside
                     - binary_sensor.is_off: cover
@@ -1064,44 +1082,7 @@ script:
                         mode: time
                         timeout: 1000
                   else:
-                    script.execute: clean_if_needed
-          else:
-            if:
-              all:
-                - switch.is_off: clean
-                - switch.is_off: maintenance
-                - binary_sensor.is_off: drum_level
-                - binary_sensor.is_off: cover
-                - binary_sensor.is_on: tray
-                - binary_sensor.is_off: bin
-              then:
-                pkt4_mcu.motor:
-                  motor: tray
-                  direction: close
-                  speed: 5
-                  mode: time
-                  timeout: 80
-              else:
-                if:
-                  all:
-                    - switch.is_on: clean
-                    - binary_sensor.is_off: approach
-                    - binary_sensor.is_off: pet_inside
-                    - binary_sensor.is_off: cover
-                    - binary_sensor.is_off: drum_down
-                    - binary_sensor.is_off: bin
-                    - binary_sensor.is_on: tray
-                    - switch.is_off: maintenance
-                  then:
-                    - globals.set:
-                        id: level_needed
-                        value: 'false'  # go past the level
-                    - pkt4_mcu.motor:
-                        motor: drum
-                        direction: down
-                        speed: 100
-                        mode: time
-                        timeout: 1000
+                    script.execute: clean_if_needed  # defer the execution
 
   - id: clean_if_needed
     mode: restart
@@ -1113,10 +1094,12 @@ script:
             - switch.is_off: maintenance
             - binary_sensor.is_off: pet_inside
             - or:
-                - lambda: return id(pet_weight).state*1000 > id(clean_threshold).state;
-                - lambda: return (id(cleans_left) > 0 && id(cleans_left) < id(clean_times).state);
+              - lambda: return id(pet_weight).state*1000 > id(clean_threshold).state;
+              - lambda: return (id(cleans_left) > 0 && id(cleans_left) < id(clean_times).state);
           then:
             switch.turn_on: clean
+          else:
+            script.execute: level_if_needed
 
   - id: auto_clean
     then:
