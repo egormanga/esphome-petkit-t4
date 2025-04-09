@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.6.2
+    version: 0.6.3
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -260,6 +260,9 @@ globals:
     type: float
     restore_value: true
 
+  - id: waste_pending
+    type: float
+
   - id: cleans_left
     type: int
 
@@ -494,7 +497,7 @@ binary_sensor:
         - switch.turn_off: motor_drum_up # XXX
         - globals.set:
             id: waste_collected
-            value: !lambda return (id(weight).state - id(litter_mass));
+            value: !lambda return min(id(waste_pending), (id(weight).state - id(litter_mass)));
         - script.execute: level_if_needed
     drum_down:
       id: drum_down
@@ -751,6 +754,9 @@ switch:
                 timeout: 80
             else:
               - script.stop: clean_if_needed
+              - globals.set:
+                  id: waste_pending
+                  value: !lambda return (id(weight).state - id(litter_mass));
               - output.ledc.set_frequency:
                   id: beeper
                   frequency: 40kHz
