@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.7.0
+    version: 0.8.0
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -185,6 +185,11 @@ image:
     type: binary
     resize: 64x64
 
+  - id: icon_waste
+    file: mdi:liquid-spot
+    type: binary
+    resize: 64x64
+
 display:
   platform: ssd1306_spi
   id: oled
@@ -216,6 +221,9 @@ display:
 
       it.image(it.get_width()/2, it.get_height()/2, icon, ImageAlign::CENTER);
       return;
+    } else if (millis() - id(cleaned_at) < 10000) {
+      it.image(it.get_width()/2, (it.get_height() - id(icon_waste).get_height())/2, id(icon_waste), ImageAlign::CENTER);
+      it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.0f", id(waste_collected)*1000);
     } else if (id(tray_full).state && millis() % 5000 < 1000) {
       it.image(it.get_width()/2, it.get_height()/2, id(icon_tray_full), ImageAlign::CENTER);
     } else if (id(clean_pending).state && millis() % 5000 < 2000) {
@@ -272,6 +280,9 @@ globals:
   - id: ota_state
     type: int
 
+  - id: cleaned_at
+    type: long
+
 pkt4_mcu:
 
 sensor:
@@ -327,6 +338,30 @@ sensor:
               then:
                 rtttl.play: :d=32,o=6,b=100:g,64p,g,64p,g
 
+        - above: !lambda return (id(waste_collected) + id(litter_threshold).state + .1f);
+          then:
+            if:
+              condition:
+                switch.is_on: maintenance
+              then:
+                rtttl.play: :d=8,o=6,b=100:4g
+
+        - above: !lambda return (id(waste_collected) + id(litter_threshold).state + .25f);
+          then:
+            if:
+              condition:
+                switch.is_on: maintenance
+              then:
+                rtttl.play: :d=8,o=6,b=100:g,p,4g
+
+        - above: !lambda return (id(waste_collected) + id(litter_threshold).state + .5f);
+          then:
+            if:
+              condition:
+                switch.is_on: maintenance
+              then:
+                rtttl.play: :d=8,o=6,b=100:g,p,g,p,4g
+
   - platform: template
     id: pet_weight
     name: Pet Weight
@@ -336,10 +371,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 2
     update_interval: 1s
-    lambda: return (id(weight).state - id(litter_mass) - id(waste_collected));
-    filters:
-      clamp:
-        min_value: 0
+    lambda: return (max(0.f, id(weight).state) - id(litter_mass) - id(waste_collected));
     on_value_range:
       above: !lambda return id(clean_threshold).state/1000.f;  # it's non-dumped waste
       below: !lambda return id(pet_threshold).state;  # not the actual pet inside
@@ -353,6 +385,31 @@ sensor:
               value: !lambda return id(clean_times).state;
 
   - platform: template
+    id: pet_mass
+    unit_of_measurement: kg
+    lambda: |-
+      if (id(pet_inside).state) return id(pet_weight).state;
+      else return {};
+    update_interval: 1s
+    filters:
+      quantile:
+
+  - platform: template
+    id: pet_body_mass
+    name: Pet Body Mass
+    icon: mdi:scale-bathroom
+    unit_of_measurement: kg
+    device_class: weight
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+    lambda: return (id(pet_mass).state - id(pet_weight).state);
+    filters:
+      - clamp:
+          min_value: 0
+      - filter_out: 0
+
+  - platform: template
     name: Litter Mass
     icon: mdi:bucket
     unit_of_measurement: g
@@ -361,9 +418,6 @@ sensor:
     accuracy_decimals: 0
     update_interval: 1s
     lambda: return id(litter_mass)*1000;
-    filters:
-      clamp:
-        min_value: 0
 
   - platform: template
     name: Waste Collected
@@ -374,9 +428,6 @@ sensor:
     accuracy_decimals: 0
     update_interval: 1s
     lambda: return id(waste_collected)*1000;
-    filters:
-      clamp:
-        min_value: 0
 
   - platform: template
     name: Litter Discarded
@@ -387,9 +438,6 @@ sensor:
     accuracy_decimals: 2
     update_interval: 1s
     lambda: return id(litter_discarded);
-    filters:
-      clamp:
-        min_value: 0
 
   - platform: template
     name: Cleans Left
@@ -481,13 +529,13 @@ binary_sensor:
         - delay: 5s
         - globals.set:
             id: waste_collected
-            value: !lambda return max(0.f, (id(weight).state - id(litter_mass)));
+            value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
         - globals.set:
             id: litter_discarded
-            value: !lambda return (id(litter_discarded) + max(0.f, (id(litter_mass) - id(weight).state)));
+            value: !lambda return (id(litter_discarded) + max(0.f, (id(litter_mass) - max(0.f, id(weight).state))));
         - globals.set:
             id: litter_mass
-            value: !lambda return (id(weight).state - id(waste_collected));
+            value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(waste_collected)));
         - script.execute: level_if_needed
     cover:
       id: cover
@@ -513,7 +561,7 @@ binary_sensor:
         - switch.turn_off: motor_drum_up # XXX
         - globals.set:
             id: waste_collected
-            value: !lambda return min(id(waste_pending), (id(weight).state - id(litter_mass)));
+            value: !lambda return min(id(waste_pending), max(0.f, (max(0.f, id(weight).state) - id(litter_mass))));
         - script.execute: level_if_needed
     drum_down:
       id: drum_down
@@ -624,7 +672,12 @@ binary_sensor:
         motor: drum
         mode: stop
     on_release:
-      script.execute: auto_clean
+      - if:
+          condition:
+            lambda: return id(pet_weight).state*1000 > id(clean_threshold).state;
+          then:
+            component.update: pet_body_mass
+      - script.execute: auto_clean
 
   - platform: template
     id: tray_full
@@ -669,13 +722,7 @@ binary_sensor:
       inverted: true
       ignore_strapping_warning: true
     on_click:
-      if:
-        condition:
-          switch.is_on: maintenance
-        then:
-          switch.turn_off: maintenance
-        else:
-          button.press: level
+      button.press: level
 
   - platform: gpio
     name: MCU
@@ -695,14 +742,17 @@ button:
     name: Level
     icon: mdi:spirit-level
     on_press:
-      - globals.set:
-          id: level_needed
-          value: 'true'
-      - if:
-          condition:
-            switch.is_off: clean
-          then:
-            script.execute: level_if_needed
+      if:
+        condition:
+          switch.is_on: maintenance
+        then:
+          switch.turn_off: maintenance
+        else:
+          - switch.turn_off: clean
+          - globals.set:
+              id: level_needed
+              value: 'true'
+          - script.execute: level_if_needed
 
   - platform: template
     name: All Litter Removed
@@ -714,7 +764,7 @@ button:
           value: '0'
       - globals.set:
           id: waste_collected
-          value: !lambda return max(0.f, (id(weight).state - id(litter_mass)));
+          value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
 
   - platform: template
     name: Weight Calibration Zero
@@ -754,13 +804,12 @@ switch:
           - binary_sensor.is_off: approach
           - binary_sensor.is_off: pet_inside
           - binary_sensor.is_off: cover
-          - binary_sensor.is_off: drum_up
           - binary_sensor.is_off: bin
+          - binary_sensor.is_off: drum_up
         then:
           if:
-            all:
-              - binary_sensor.is_off: cover
-              - binary_sensor.is_off: tray
+            condition:
+              binary_sensor.is_off: tray
             then:
               pkt4_mcu.motor:
                 motor: tray
@@ -772,7 +821,7 @@ switch:
               - script.stop: clean_if_needed
               - globals.set:
                   id: waste_pending
-                  value: !lambda return (id(weight).state - id(litter_mass));
+                  value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
               - globals.set:
                   id: level_needed
                   value: 'true'
@@ -786,9 +835,12 @@ switch:
           - delay: 0s  # yield
           - switch.turn_off: clean
     turn_off_action:
-      pkt4_mcu.motor:
-        motor: drum
-        mode: stop
+      - pkt4_mcu.motor:
+          motor: drum
+          mode: stop
+      - globals.set:
+          id: cleaned_at
+          value: !lambda return millis();
 
   - platform: template
     id: maintenance
@@ -834,7 +886,7 @@ switch:
           mode: stop
       - globals.set:
           id: litter_mass
-          value: !lambda return (id(weight).state - id(waste_collected));
+          value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(waste_collected)));
       - script.execute: level_if_needed
 
   - platform: template
@@ -1109,7 +1161,9 @@ script:
             - switch.is_off: maintenance
             - binary_sensor.is_off: pet_inside
             - any:
-              - lambda: return id(pet_weight).state*1000 > id(clean_threshold).state;
+              - all:
+                - switch.is_on: do_auto_clean
+                - lambda: return id(pet_weight).state*1000 > id(clean_threshold).state;
               - lambda: return (id(cleans_left) > 0 && id(cleans_left) < id(clean_times).state);
           then:
             switch.turn_on: clean
