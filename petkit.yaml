@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.8.0
+    version: 0.8.1
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -156,7 +156,7 @@ image:
     resize: 96x96
 
   - id: icon_tray
-    file: mdi:stack-overflow
+    file: mdi:tray-alert
     type: binary
     resize: 96x96
 
@@ -221,7 +221,7 @@ display:
 
       it.image(it.get_width()/2, it.get_height()/2, icon, ImageAlign::CENTER);
       return;
-    } else if (millis() - id(cleaned_at) < 10000) {
+    } else if (id(cleaned_at) && millis() - id(cleaned_at) < 10000) {
       it.image(it.get_width()/2, (it.get_height() - id(icon_waste).get_height())/2, id(icon_waste), ImageAlign::CENTER);
       it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.0f", id(waste_collected)*1000);
     } else if (id(tray_full).state && millis() % 5000 < 1000) {
@@ -501,7 +501,12 @@ binary_sensor:
                     id: level_needed
                     value: 'true'
       on_release:
-        script.execute: auto_clean
+        - if:
+            condition:
+              lambda: return id(pet_weight).state*1000 > id(pet_threshold).state;
+            then:
+              component.update: pet_body_mass
+        - script.execute: auto_clean
     bin:
       id: bin
       name: Bin
@@ -672,12 +677,7 @@ binary_sensor:
         motor: drum
         mode: stop
     on_release:
-      - if:
-          condition:
-            lambda: return id(pet_weight).state*1000 > id(clean_threshold).state;
-          then:
-            component.update: pet_body_mass
-      - script.execute: auto_clean
+      script.execute: auto_clean
 
   - platform: template
     id: tray_full
