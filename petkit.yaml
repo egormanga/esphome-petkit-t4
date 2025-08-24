@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.8.1
+    version: 0.8.2
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -230,7 +230,7 @@ display:
       it.image(it.get_width()/2, it.get_height()/2, id(icon_auto_clean), ImageAlign::CENTER);
     } else if (id(maintenance).state || id(pet_weight).state > 0.01f) {
       it.image(it.get_width()/2, (it.get_height() - id(icon_weight).get_height())/2, id(icon_weight), ImageAlign::CENTER);
-      it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.2f", id(maintenance).state?id(weight).state:id(pet_weight).state);
+      it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.2f", id(maintenance).state?id(weight).state-id(waste_collected):id(pet_weight).state);
     } else if (id(cover).state || id(bin).state || id(approach).state) {
       it.image(it.get_width()/2, it.get_height()/2, id(icon_problem), ImageAlign::CENTER);
     } else if (id(tray).state) {
