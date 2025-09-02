@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.8.2
+    version: 0.9.0
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -488,9 +488,7 @@ binary_sensor:
           condition:
             switch.is_off: maintenance
           then:
-            - pkt4_mcu.motor:
-                motor: drum
-                mode: stop
+            - script.execute: emergency_stop
             - if:
                 all:
                   - switch.is_off: clean
@@ -673,9 +671,7 @@ binary_sensor:
     filters:
       delayed_off: 5s
     on_press:
-      pkt4_mcu.motor:
-        motor: drum
-        mode: stop
+      script.execute: emergency_stop
     on_release:
       script.execute: auto_clean
 
@@ -1191,6 +1187,18 @@ script:
               value: !lambda return id(cleans_left)-1;
         else:
           script.execute: level_if_needed
+
+  - id: emergency_stop
+    then:
+      - pkt4_mcu.motor:
+          motor: drum
+          mode: stop
+      - pkt4_mcu.motor:
+          motor: tray
+          direction: close
+          speed: 5
+          mode: time
+          timeout: 80
 
 # by Sdore, 2024-25
 #   www.sdore.me

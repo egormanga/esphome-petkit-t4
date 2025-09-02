@@ -13,6 +13,7 @@ It's able to work completely offline & without HA, although it's recommended to 
 - Top (menu) button: Maintenance mode / Reboot
 - Bottom (ok) button: Maintenance done & Level the litter
 - Advanced status displaying
+- Quieter functioning
 - Collected waste amount tracking
 - Beep after reaching set amount of litter in maintenance mode
 - QR code with a Wi-Fi AP connection shortcut
@@ -33,6 +34,7 @@ It's able to work completely offline & without HA, although it's recommended to 
 * [ ] Automated calibration
 * [ ] Dumping the stock calibration data from factory binaries (per-chip)
 * [x] Weight as additional safety check
+* [ ] Tune the timeouts and speeds
 
 
 ## Weight Sensor Calibration
