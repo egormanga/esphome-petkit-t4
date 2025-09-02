@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.9.0
+    version: 0.9.1
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -1199,6 +1199,7 @@ script:
           speed: 5
           mode: time
           timeout: 80
+      - switch.turn_off: clean
 
 # by Sdore, 2024-25
 #   www.sdore.me
