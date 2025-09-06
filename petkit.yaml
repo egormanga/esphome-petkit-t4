@@ -8,14 +8,12 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.9.2
+    version: 0.9.3
   platformio_options:
     board_upload.maximum_size: 0x800000
-  on_boot:
+  #on_boot:
     #- lambda: uart_set_pin(UART_NUM_1, 25, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     #- lambda: esp_wifi_set_protocol(WIFI_IF_STA, (WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G));
-    - delay: 1min # TODO FIXME
-    - pkt4_mcu.init:
 
 external_components:
   - source: ./components
@@ -488,16 +486,7 @@ binary_sensor:
           condition:
             switch.is_off: maintenance
           then:
-            - script.execute: emergency_stop
-            - if:
-                all:
-                  - switch.is_off: clean
-                  - switch.is_off: maintenance
-                  - binary_sensor.is_on: drum_level
-                then:
-                  globals.set:
-                    id: level_needed
-                    value: 'true'
+            script.execute: emergency_stop
       on_release:
         - if:
             condition:
@@ -603,6 +592,7 @@ binary_sensor:
       id: drum_level
       name: Drum Level
       entity_category: diagnostic
+      trigger_on_initial_state: true
       on_press:
         globals.set:
           id: level_needed
@@ -638,6 +628,7 @@ binary_sensor:
       name: Tray
       entity_category: diagnostic
       disabled_by_default: true
+      trigger_on_initial_state: true
       on_state:
         pkt4_mcu.motor:
           motor: tray
@@ -728,6 +719,7 @@ binary_sensor:
     pin:
       number: GPIO22
       allow_other_uses: true
+    trigger_on_initial_state: true
     on_press:  # ready
       pkt4_mcu.init:
     on_release:  # reset
@@ -836,9 +828,16 @@ switch:
       - pkt4_mcu.motor:
           motor: drum
           mode: stop
-      - globals.set:
-          id: cleaned_at
-          value: !lambda return millis();
+      - pkt4_mcu.motor:
+          motor: tray
+          direction: close
+          speed: 5
+          mode: time
+          timeout: 80
+    on_turn_off:
+      globals.set:
+        id: cleaned_at
+        value: !lambda return millis();
 
   - platform: template
     id: maintenance
@@ -1197,12 +1196,15 @@ script:
       - pkt4_mcu.motor:
           motor: drum
           mode: stop
-      - pkt4_mcu.motor:
-          motor: tray
-          direction: close
-          speed: 5
-          mode: time
-          timeout: 80
+      - if:
+          all:
+            - switch.is_off: clean
+            - switch.is_off: maintenance
+            - binary_sensor.is_on: drum_level
+          then:
+            globals.set:
+              id: level_needed
+              value: 'true'
       - switch.turn_off: clean
 
 # by Sdore, 2024-25
