@@ -82,6 +82,7 @@ void PKT4MCUComponent::loop() {
 						if (this->tray_sensor_) {
 							if (!data->tray_open && !!data->tray_closed) this->tray_sensor_->publish_state(true);
 							else if (!data->tray_closed && !!data->tray_open) this->tray_sensor_->publish_state(false);
+							else this->tray_sensor_->invalidate_state();
 						}
 						if (this->bin_sensor_) this->bin_sensor_->publish_state(data->bin_present);
 					}; break;

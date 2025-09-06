@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.9.1
+    version: 0.9.2
   platformio_options:
     board_upload.maximum_size: 0x800000
   on_boot:
@@ -520,7 +520,8 @@ binary_sensor:
         - if:
             all:
               - binary_sensor.is_off: cover
-              - binary_sensor.is_off: tray
+              - not:
+                  binary_sensor.is_on: tray
             then:
               pkt4_mcu.motor:
                 motor: tray
@@ -805,7 +806,8 @@ switch:
         then:
           if:
             condition:
-              binary_sensor.is_off: tray
+              not:
+                binary_sensor.is_on: tray
             then:
               pkt4_mcu.motor:
                 motor: tray
@@ -858,7 +860,8 @@ switch:
               value: 'true'
           - if:
               condition:
-                binary_sensor.is_off: tray
+                not:
+                  binary_sensor.is_on: tray
               then:
                 pkt4_mcu.motor:
                   motor: tray
@@ -1096,7 +1099,8 @@ script:
           all:
             - lambda: return id(level_needed);
             - binary_sensor.is_off: cover
-            - binary_sensor.is_off: tray
+            - not:
+                binary_sensor.is_on: tray
           then:
             pkt4_mcu.motor:
               motor: tray
