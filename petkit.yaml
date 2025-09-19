@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.9.3
+    version: 0.9.4
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -804,7 +804,7 @@ switch:
               pkt4_mcu.motor:
                 motor: tray
                 direction: open
-                speed: 50
+                speed: 100
                 mode: time
                 timeout: 80
             else:
@@ -913,7 +913,7 @@ switch:
           pkt4_mcu.motor:
             motor: tray
             direction: open
-            speed: 50
+            speed: 100
             mode: time
             timeout: 80
     turn_off_action:
@@ -925,7 +925,7 @@ switch:
           pkt4_mcu.motor:
             motor: tray
             direction: close
-            speed: 5
+            speed: 100
             mode: time
             timeout: 80
 
@@ -1104,7 +1104,7 @@ script:
             pkt4_mcu.motor:
               motor: tray
               direction: open
-              speed: 50
+              speed: 100
               mode: time
               timeout: 80
           else:
@@ -1205,7 +1205,6 @@ script:
             globals.set:
               id: level_needed
               value: 'true'
-      - switch.turn_off: clean
 
 # by Sdore, 2024-25
 #   www.sdore.me
