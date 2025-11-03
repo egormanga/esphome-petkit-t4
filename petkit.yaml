@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.9.4
+    version: 0.9.5
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -520,16 +520,21 @@ binary_sensor:
                 timeout: 80
       on_release:
         - delay: 5s
-        - globals.set:
-            id: waste_collected
-            value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
-        - globals.set:
-            id: litter_discarded
-            value: !lambda return (id(litter_discarded) + max(0.f, (id(litter_mass) - max(0.f, id(weight).state))));
-        - globals.set:
-            id: litter_mass
-            value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(waste_collected)));
-        - script.execute: level_if_needed
+        - if:
+            all:
+              - binary_sensor.is_off: bin
+              - binary_sensor.is_off: cover
+            then:
+              - globals.set:
+                  id: waste_collected
+                  value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
+              - globals.set:
+                  id: litter_discarded
+                  value: !lambda return (id(litter_discarded) + max(0.f, (id(litter_mass) - max(0.f, id(weight).state))));
+              - globals.set:
+                  id: litter_mass
+                  value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(waste_collected)));
+              - script.execute: level_if_needed
     cover:
       id: cover
       name: Cover
@@ -552,9 +557,14 @@ binary_sensor:
             motor: drum
             mode: stop
         - switch.turn_off: motor_drum_up # XXX
-        - globals.set:
-            id: waste_collected
-            value: !lambda return min(id(waste_pending), max(0.f, (max(0.f, id(weight).state) - id(litter_mass))));
+        - if:
+            all:
+              - binary_sensor.is_off: pet_inside
+              - binary_sensor.is_off: cover
+            then:
+              globals.set:
+                id: waste_collected
+                value: !lambda return min(id(waste_pending), max(0.f, (max(0.f, id(weight).state) - id(litter_mass))));
         - script.execute: level_if_needed
     drum_down:
       id: drum_down
@@ -748,21 +758,29 @@ button:
     icon: mdi:delete-empty
     entity_category: config
     on_press:
-      - globals.set:
-          id: litter_mass
-          value: '0'
-      - globals.set:
-          id: waste_collected
-          value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
+      if:
+        condition:
+          binary_sensor.is_off: cover
+        then:
+          - globals.set:
+              id: litter_mass
+              value: '0'
+          - globals.set:
+              id: waste_collected
+              value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
 
   - platform: template
     name: Weight Calibration Zero
     icon: mdi:scale-balance
     entity_category: config
     on_press:
-      globals.set:
-        id: weight_zero
-        value: !lambda return id(weight).raw_state;
+      if:
+        condition:
+          binary_sensor.is_off: cover
+        then:
+          globals.set:
+            id: weight_zero
+            value: !lambda return id(weight).raw_state;
 
   - platform: restart
     name: Restart
@@ -882,9 +900,13 @@ switch:
       - pkt4_mcu.motor:
           motor: drum
           mode: stop
-      - globals.set:
-          id: litter_mass
-          value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(waste_collected)));
+      - if:
+          condition:
+            binary_sensor.is_off: cover
+          then:
+            globals.set:
+              id: litter_mass
+              value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(waste_collected)));
       - script.execute: level_if_needed
 
   - platform: template
@@ -1086,9 +1108,13 @@ number:
     initial_value: NaN
     update_interval: never
     set_action:
-      globals.set:
-        id: weight_scale
-        value: !lambda return ((float)x / (id(weight).raw_state - id(weight_zero)));
+      if:
+        condition:
+          binary_sensor.is_off: cover
+        then:
+          globals.set:
+            id: weight_scale
+            value: !lambda return ((float)x / (id(weight).raw_state - id(weight_zero)));
 
 script:
   - id: level_if_needed
