@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.9.5
+    version: 0.10.0
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -609,8 +609,9 @@ binary_sensor:
           value: 'true'
       on_release:
         - if:
-            condition:
-              lambda: return id(level_needed);
+            all:
+              - switch.is_off: clean
+              - switch.is_off: maintenance
             then:
               - pkt4_mcu.motor:
                   motor: drum
@@ -684,6 +685,13 @@ binary_sensor:
     device_class: problem
     entity_category: diagnostic
     lambda: return id(waste_collected) >= id(tray_capacity).state;
+
+  - platform: template
+    name: Level Needed
+    icon: mdi:compare-horizontal
+    device_class: problem
+    entity_category: diagnostic
+    lambda: return id(level_needed);
 
   - platform: template
     id: clean_pending
@@ -1166,15 +1174,12 @@ script:
                         - binary_sensor.is_on: tray
                         - switch.is_off: maintenance
                       then:
-                        - globals.set:
-                            id: level_needed
-                            value: 'false'  # go past the level
-                        - pkt4_mcu.motor:
-                            motor: drum
-                            direction: down
-                            speed: 100
-                            mode: time
-                            timeout: 1000
+                        pkt4_mcu.motor:
+                          motor: drum
+                          direction: down
+                          speed: 100
+                          mode: time
+                          timeout: 1000
 
   - id: clean_if_needed
     mode: restart
