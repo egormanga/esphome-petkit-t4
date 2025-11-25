@@ -9,7 +9,10 @@ static const char *const TAG = "pkt4_mcu";
 
 void PKT4MCUComponent::setup() {
 	ESP_LOGCONFIG(TAG, "Setting up T4 MCU...");
-	this->init();
+	this->setup_time_ = millis();
+	this->startup_delay_complete_ = false;
+	// Don't call init() directly - wait for startup delay in loop()
+	ESP_LOGI(TAG, "Waiting %dms before initialization...", INIT_STARTUP_DELAY_MS);
 }
 
 void PKT4MCUComponent::dump_config() {
@@ -18,11 +21,29 @@ void PKT4MCUComponent::dump_config() {
 	ESP_LOGCONFIG(TAG, "  HW ver: %d", this->hw_ver_);
 	ESP_LOGCONFIG(TAG, "  SW ver: %d", this->sw_ver_);
 	ESP_LOGCONFIG(TAG, "  Inited: %s", YESNO(this->inited_));
+	ESP_LOGCONFIG(TAG, "  Init pending: %s", YESNO(this->init_pending_));
+	ESP_LOGCONFIG(TAG, "  Retry count: %d/%d", this->init_retry_count_, MAX_INIT_RETRIES);
 }
 
 //void PKT4MCUComponent::update() {}
 
 void PKT4MCUComponent::loop() {
+	// Handle startup delay before first init attempt
+	if (!this->startup_delay_complete_) {
+		if (millis() - this->setup_time_ >= INIT_STARTUP_DELAY_MS) {
+			this->startup_delay_complete_ = true;
+			ESP_LOGI(TAG, "Startup delay complete, initializing...");
+			this->init();
+		}
+		return;
+	}
+
+	// Check for initialization timeout and retry if needed
+	this->check_init_timeout_();
+	
+	// Check MCU watchdog if initialized
+	this->check_mcu_watchdog_();
+
 	if (this->available() >= offsetof(MCUPacket, payload) + sizeof(uint16_t) && (this->packet_.magic = (this->read() | (this->read() << 8))) == MAGIC) {
 		this->read_byte(&this->packet_.len);
 		this->read_array(((uint8_t*)&this->packet_ + offsetof(MCUPacket, len) + 1),
@@ -35,6 +56,9 @@ void PKT4MCUComponent::loop() {
 			uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len)), ' ');
 			return;
 		}
+
+		// Update last packet time for watchdog
+		this->last_packet_time_ = millis();
 
 		if (this->packet_.pid != 0x0 &&
 		    this->packet_.pid != 0x1 &&
@@ -123,73 +147,89 @@ void PKT4MCUComponent::loop() {
 			}; break;
 
 			case 0x9: {
-				switch (node->node) {
-					case 0x0: {
-						struct __attribute__((packed)) p9_0 {
-							uint8_t unk,
-							        hw_ver,
-							        sw_ver;
-						} *data = (struct p9_0*)node->data;
-
-						this->hw_ver_ = data->hw_ver;
-						this->sw_ver_ = data->sw_ver;
-
-						uint8_t buf_20[] = {0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x64, 0x00, 0x00};
-						this->send_(0x2, buf_20, sizeof(buf_20));
-
-						uint8_t buf_21[] = {0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x64, 0x00, 0x00};
-						this->send_(0x2, buf_21, sizeof(buf_21));
-
-						uint8_t buf_C0[] = {0x00, 0x0A, 0xC8, 0x0F, 0x0A, 0x0A, 0x0A, 0x05, 0x00};
-						this->send_(0xC, buf_C0, sizeof(buf_C0));
-
-						uint8_t buf_C1[] = {0x01, 0xC8, 0x00, 0xC8, 0x00, 0xC8, 0x00, 0xC8, 0x00};
-						this->send_(0xC, buf_C1, sizeof(buf_C1));
-
-						uint8_t buf_C2[] = {0x02, 0xFC, 0x01, 0x1F, 0x00, 0x4C, 0x70, 0x01};
-						this->send_(0xC, buf_C2, sizeof(buf_C2));
-
-						uint8_t buf_D0[] = {0x00, 0x02, 0xFF, 0x0A, 0x00, 0x1E, 0x00, 0x06};
-						this->send_(0xD, buf_D0, sizeof(buf_D0));
-
-						uint8_t buf_D1[] = {0x01, 0x02, 0xFF, 0x0A, 0x00, 0x1E, 0x00, 0x06};
-						this->send_(0xD, buf_D1, sizeof(buf_D1));
-
-						uint8_t buf_40[] = {0x00, 0x00, 0x00, 0x00, 0xDC, 0x05, 0xC8, 0x00, 0x1E, 0x00, 0x14, 0x00};
-						this->send_(0x4, buf_40, sizeof(buf_40));
-
-						uint8_t buf_41[] = {0x01, 0x00, 0x00, 0x00, 0x14, 0x05, 0xC8, 0x00, 0x1E, 0x00, 0x14, 0x00};
-						this->send_(0x4, buf_41, sizeof(buf_41));
-
-						this->send_(0x0, (uint8_t*)(uint8_t[]){0x00, 0}, 2);
-
-						struct __attribute__((packed)) {
-							uint8_t sid;
-							uint8_t rate[3];
-						} buf_1 = {
-							.sid = 0,
-							.rate = {10, 10, 10},
-						};
-						this->send_(0x1, (uint8_t*)&buf_1, sizeof(buf_1));
-
-						/*struct __attribute__((packed)) {
-							uint8_t sid;
-							uint8_t samples;
-							uint16_t rate[2];
-						} buf_7 = {
-							.sid = 0,
-							.samples = 5,
-							.rate = {10, 10},
-						};
-						this->send_(0x7, (uint8_t*)&buf_7, sizeof(buf_7));*/
-
-						this->inited_ = true;
-						ESP_LOGI(TAG, "Inited ver hw: %d sw: %d", this->hw_ver_, this->sw_ver_);
-					}; break;
-
-					default: ESP_LOGW(TAG, "Unknown node for %x: %x", this->packet_.pid, this->packet_.payload[0]);
-				}
-			}; break;
+					switch (node->node) {
+						case 0x0: {
+							struct __attribute__((packed)) p9_0 {
+								uint8_t unk,
+								        hw_ver,
+								        sw_ver;
+							} *data = (struct p9_0*)node->data;
+	
+							this->hw_ver_ = data->hw_ver;
+							this->sw_ver_ = data->sw_ver;
+	
+							// Only send configuration packets if we're actually initializing
+							// Skip if already initialized to avoid infinite loop
+							if (this->inited_) {
+								ESP_LOGD(TAG, "Received version packet while already initialized, ignoring");
+								break;
+							}
+	
+							if (!this->init_pending_) {
+								ESP_LOGD(TAG, "Received unsolicited version packet, ignoring");
+								break;
+							}
+	
+							ESP_LOGD(TAG, "Sending MCU configuration packets...");
+	
+							uint8_t buf_20[] = {0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x64, 0x00, 0x00};
+							this->send_(0x2, buf_20, sizeof(buf_20));
+	
+							uint8_t buf_21[] = {0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x64, 0x00, 0x00};
+							this->send_(0x2, buf_21, sizeof(buf_21));
+	
+							uint8_t buf_C0[] = {0x00, 0x0A, 0xC8, 0x0F, 0x0A, 0x0A, 0x0A, 0x05, 0x00};
+							this->send_(0xC, buf_C0, sizeof(buf_C0));
+	
+							uint8_t buf_C1[] = {0x01, 0xC8, 0x00, 0xC8, 0x00, 0xC8, 0x00, 0xC8, 0x00};
+							this->send_(0xC, buf_C1, sizeof(buf_C1));
+	
+							uint8_t buf_C2[] = {0x02, 0xFC, 0x01, 0x1F, 0x00, 0x4C, 0x70, 0x01};
+							this->send_(0xC, buf_C2, sizeof(buf_C2));
+	
+							uint8_t buf_D0[] = {0x00, 0x02, 0xFF, 0x0A, 0x00, 0x1E, 0x00, 0x06};
+							this->send_(0xD, buf_D0, sizeof(buf_D0));
+	
+							uint8_t buf_D1[] = {0x01, 0x02, 0xFF, 0x0A, 0x00, 0x1E, 0x00, 0x06};
+							this->send_(0xD, buf_D1, sizeof(buf_D1));
+	
+							uint8_t buf_40[] = {0x00, 0x00, 0x00, 0x00, 0xDC, 0x05, 0xC8, 0x00, 0x1E, 0x00, 0x14, 0x00};
+							this->send_(0x4, buf_40, sizeof(buf_40));
+	
+							uint8_t buf_41[] = {0x01, 0x00, 0x00, 0x00, 0x14, 0x05, 0xC8, 0x00, 0x1E, 0x00, 0x14, 0x00};
+							this->send_(0x4, buf_41, sizeof(buf_41));
+	
+							this->send_(0x0, (uint8_t*)(uint8_t[]){0x00, 0}, 2);
+	
+							struct __attribute__((packed)) {
+								uint8_t sid;
+								uint8_t rate[3];
+							} buf_1 = {
+								.sid = 0,
+								.rate = {10, 10, 10},
+							};
+							this->send_(0x1, (uint8_t*)&buf_1, sizeof(buf_1));
+	
+							/*struct __attribute__((packed)) {
+								uint8_t sid;
+								uint8_t samples;
+								uint16_t rate[2];
+							} buf_7 = {
+								.sid = 0,
+								.samples = 5,
+								.rate = {10, 10},
+							};
+							this->send_(0x7, (uint8_t*)&buf_7, sizeof(buf_7));*/
+	
+							this->inited_ = true;
+							this->init_pending_ = false;
+							this->init_retry_count_ = 0;
+							ESP_LOGI(TAG, "MCU initialized successfully - hw ver: %d, sw ver: %d", this->hw_ver_, this->sw_ver_);
+						}; break;
+	
+						default: ESP_LOGW(TAG, "Unknown node for %x: %x", this->packet_.pid, this->packet_.payload[0]);
+					}
+				}; break;
 
 			default:
 				ESP_LOGW(TAG, "Unknown packet: %x (node %x)", this->packet_.pid, this->packet_.payload[0]);
@@ -199,15 +239,107 @@ void PKT4MCUComponent::loop() {
 }
 
 void PKT4MCUComponent::init() {
+	if (this->inited_) {
+		ESP_LOGD(TAG, "Already initialized, skipping init request");
+		return;
+	}
+	
+	if (this->init_pending_) {
+		ESP_LOGD(TAG, "Init already pending, skipping duplicate request");
+		return;
+	}
+	
+	this->init_pending_ = true;
+	this->init_retry_count_ = 0;
+	
+	ESP_LOGI(TAG, "Starting MCU initialization...");
+	this->send_init_request_();
+}
+
+void PKT4MCUComponent::send_init_request_() {
+	this->init_request_time_ = millis();
+	ESP_LOGD(TAG, "Sending init request (attempt %d/%d)", this->init_retry_count_ + 1, MAX_INIT_RETRIES);
 	this->send_(0x9, (uint8_t*)(uint8_t[]){0x80}, 1);
+}
+
+void PKT4MCUComponent::check_init_timeout_() {
+	if (!this->init_pending_ || this->inited_) {
+		return;
+	}
+	
+	uint32_t elapsed = millis() - this->init_request_time_;
+	
+	if (elapsed >= INIT_TIMEOUT_MS) {
+		this->init_retry_count_++;
+		
+		if (this->init_retry_count_ >= MAX_INIT_RETRIES) {
+			ESP_LOGE(TAG, "MCU initialization failed after %d attempts!", MAX_INIT_RETRIES);
+			ESP_LOGE(TAG, "The MCU may not be responding. Try power cycling the device.");
+			this->init_pending_ = false;
+			// Keep trying periodically by setting up for watchdog to trigger re-init
+			this->last_packet_time_ = 0;
+			return;
+		}
+		
+		ESP_LOGW(TAG, "Init timeout (attempt %d/%d), retrying in %dms...",
+		         this->init_retry_count_, MAX_INIT_RETRIES, INIT_RETRY_DELAY_MS);
+		
+		// Wait before retry
+		delay(INIT_RETRY_DELAY_MS);
+		this->send_init_request_();
+	}
+}
+
+void PKT4MCUComponent::check_mcu_watchdog_() {
+	// Only check watchdog if we were previously initialized or if init failed
+	if (!this->inited_ && this->init_pending_) {
+		return;
+	}
+	
+	// If we've never received a packet, don't trigger watchdog yet
+	if (this->last_packet_time_ == 0) {
+		return;
+	}
+	
+	uint32_t elapsed = millis() - this->last_packet_time_;
+	
+	if (elapsed >= MCU_WATCHDOG_TIMEOUT_MS) {
+		ESP_LOGW(TAG, "MCU watchdog timeout! No packets received for %dms", elapsed);
+		ESP_LOGW(TAG, "Attempting re-initialization...");
+		
+		// Reset state and try to reinitialize
+		this->inited_ = false;
+		this->init_pending_ = false;
+		this->init_retry_count_ = 0;
+		this->last_packet_time_ = millis(); // Reset to prevent immediate re-trigger
+		
+		this->init();
+	}
 }
 
 void PKT4MCUComponent::deinit() {
 	this->inited_ = false;
+	this->init_pending_ = false;
+	this->init_retry_count_ = 0;
 	ESP_LOGW(TAG, "Deinited T4 MCU");
 }
 
 void PKT4MCUComponent::motor(uint8_t motor, uint8_t mode, uint8_t direction, uint8_t speed, uint16_t duration, uint16_t timeout) {
+	// Check if MCU is initialized before sending motor commands
+	// Exception: mode 2 (stop) is always allowed for safety
+	if (!this->inited_ && mode != 2) {
+		ESP_LOGW(TAG, "Motor command rejected - MCU not initialized!");
+		if (!this->init_pending_) {
+			ESP_LOGI(TAG, "Triggering initialization...");
+			this->init();
+		}
+		return;
+	}
+	
+	if (!this->inited_ && mode == 2) {
+		ESP_LOGD(TAG, "Allowing motor stop command despite uninitialized state (safety)");
+	}
+	
 	struct __attribute__((packed)) {
 		uint8_t motor,
 		        mode,
