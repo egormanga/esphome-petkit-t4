@@ -63,12 +63,12 @@ class PKT4MCUComponent: public Component, public uart::UARTDevice {
 
 template<typename... Ts> class InitAction: public Action<Ts...>, public Parented<PKT4MCUComponent> {
 	public:
-		void play(Ts... x) override { this->parent_->init(); }
+		void play(const Ts &...x) override { this->parent_->init(); }
 };
 
 template<typename... Ts> class DeinitAction: public Action<Ts...>, public Parented<PKT4MCUComponent> {
 	public:
-		void play(Ts... x) override { this->parent_->deinit(); }
+		void play(const Ts &...x) override { this->parent_->deinit(); }
 };
 
 template<typename... Ts> class MotorAction: public Action<Ts...>, public Parented<PKT4MCUComponent> {
@@ -80,7 +80,7 @@ template<typename... Ts> class MotorAction: public Action<Ts...>, public Parente
 		void set_duration(uint16_t duration) { this->duration_ = duration; }
 		void set_timeout(uint16_t timeout) { this->timeout_ = timeout; }
 
-		void play(Ts... x) override { this->parent_->motor(this->motor_, this->mode_, this->direction_, this->speed_, this->duration_, this->timeout_); }
+		void play(const Ts &...x) override { this->parent_->motor(this->motor_, this->mode_, this->direction_, this->speed_, this->duration_, this->timeout_); }
 
 	protected:
 		uint8_t motor_, mode_, direction_, speed_{0};
