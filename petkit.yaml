@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.10.0
+    version: 0.10.1
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -33,6 +33,7 @@ wifi:
     password: !secret ap_password
   power_save_mode: none
   #output_power: 20dB
+  reboot_timeout: 0s  # never
   on_connect:
     rtttl.play: :d=16,o=6,b=100:e,g
   on_disconnect:
@@ -58,6 +59,7 @@ ota:
 api:
   encryption:
     key: !secret api_encryption_key
+  reboot_timeout: 0s  # never
 
 logger:
   hardware_uart: UART1
@@ -231,7 +233,7 @@ display:
       it.printf(it.get_width()/2, it.get_height(), id(font_weight), TextAlign::BOTTOM_CENTER, "%.2f", id(maintenance).state?id(weight).state-id(waste_collected):id(pet_weight).state);
     } else if (id(cover).state || id(bin).state || id(approach).state) {
       it.image(it.get_width()/2, it.get_height()/2, id(icon_problem), ImageAlign::CENTER);
-    } else if (id(tray).state) {
+    } else if (id(tray).state || !id(tray).has_state()) {
       it.image(it.get_width()/2, it.get_height()/2, id(icon_tray), ImageAlign::CENTER);
     } else if (id(sensor_uptime).state < 10) {
       it.image(it.get_width()/2, it.get_height()/2, id(icon_logo), ImageAlign::CENTER);
@@ -526,11 +528,11 @@ binary_sensor:
               - binary_sensor.is_off: cover
             then:
               - globals.set:
-                  id: waste_collected
-                  value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
-              - globals.set:
                   id: litter_discarded
                   value: !lambda return (id(litter_discarded) + max(0.f, (id(litter_mass) - max(0.f, id(weight).state))));
+              - globals.set:
+                  id: waste_collected
+                  value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(litter_mass)));
               - globals.set:
                   id: litter_mass
                   value: !lambda return max(0.f, (max(0.f, id(weight).state) - id(waste_collected)));

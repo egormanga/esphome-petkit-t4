@@ -15,9 +15,10 @@ void PKT4MCUComponent::setup() {
 void PKT4MCUComponent::dump_config() {
 	ESP_LOGCONFIG(TAG, "T4 MCU:");
 	this->check_uart_settings(115200, 1, uart::UART_CONFIG_PARITY_NONE, 8);
+	ESP_LOGCONFIG(TAG, "  Inited: %s", YESNO(this->inited_));
+	if (!this->inited_) return;
 	ESP_LOGCONFIG(TAG, "  HW ver: %d", this->hw_ver_);
 	ESP_LOGCONFIG(TAG, "  SW ver: %d", this->sw_ver_);
-	ESP_LOGCONFIG(TAG, "  Inited: %s", YESNO(this->inited_));
 }
 
 //void PKT4MCUComponent::update() {}
@@ -27,8 +28,8 @@ void PKT4MCUComponent::loop() {
 		this->read_byte(&this->packet_.len);
 		this->read_array(((uint8_t*)&this->packet_ + offsetof(MCUPacket, len) + 1),
 		                 (this->packet_.len - (offsetof(MCUPacket, len) + 1)));
-		uint16_t crc_in = *(uint16_t*)((uint8_t*)&this->packet_ + this->packet_.len - sizeof(uint16_t)),
-		         crc_act = crc16be((uint8_t*)&this->packet_, (this->packet_.len - sizeof(uint16_t)), 0xffff);
+		uint16_t crc_in = *(uint16_t*)((uint8_t*)&this->packet_ + this->packet_.len - sizeof(crc_in)),
+		         crc_act = crc16be((uint8_t*)&this->packet_, (this->packet_.len - sizeof(crc_in)), 0xffff);
 
 		if (crc_in != crc_act) {
 			ESP_LOGW(TAG, "CRC mismatch: %04x != %04x", crc_act, crc_in);
@@ -42,9 +43,8 @@ void PKT4MCUComponent::loop() {
 		    this->packet_.pid != 0x2 &&
 		    this->packet_.pid != 0x3 &&
 		    this->packet_.pid != 0x7) {
-			ESP_LOGD(TAG, "< %X seq=%u len=%u crc=%04x", this->packet_.pid, this->packet_.seq, (this->packet_.len - offsetof(MCUPacket, payload) - sizeof(uint16_t)), crc_in);
-
-			uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>(this->packet_.payload, (this->packet_.payload + (this->packet_.len - offsetof(MCUPacket, payload)) - sizeof(uint16_t))), ' ');
+			ESP_LOGD(TAG, "< %X seq=%u len=%u crc=%04x", this->packet_.pid, this->packet_.seq, (this->packet_.len - offsetof(MCUPacket, payload) - sizeof(crc_in)), crc_in);
+			uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>(this->packet_.payload, (this->packet_.payload + (this->packet_.len - offsetof(MCUPacket, payload)) - sizeof(crc_in))), ' ');
 		}
 
 		struct __attribute__((packed)) node {
@@ -73,7 +73,7 @@ void PKT4MCUComponent::loop() {
 							uint16_t unk :7;
 						} *data = (struct p1_0*)node->data;  // repeated twice in payload
 
-						if (data->unk0) ESP_LOGD(TAG, "0x1.0 unk0 bit set!");
+						if (data->unk0) ESP_LOGW(TAG, "0x1.0 unk0 bit set!");
 						if (this->approach_sensor_) this->approach_sensor_->publish_state(data->approached);
 						if (this->cover_sensor_) this->cover_sensor_->publish_state(data->cover_present);
 						if (this->drum_level_sensor_) this->drum_level_sensor_->publish_state(data->drum_level);
@@ -85,6 +85,7 @@ void PKT4MCUComponent::loop() {
 							else this->tray_sensor_->invalidate_state();
 						}
 						if (this->bin_sensor_) this->bin_sensor_->publish_state(data->bin_present);
+						if (data->unk0) ESP_LOGW(TAG, "0x1.0 has unknown bits set: %X", data->unk);
 					}; break;
 
 					case 0x1: {
@@ -133,6 +134,8 @@ void PKT4MCUComponent::loop() {
 
 						this->hw_ver_ = data->hw_ver;
 						this->sw_ver_ = data->sw_ver;
+
+						if (this->inited_) return;
 
 						uint8_t buf_20[] = {0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x64, 0x00, 0x00};
 						this->send_(0x2, buf_20, sizeof(buf_20));
@@ -192,8 +195,9 @@ void PKT4MCUComponent::loop() {
 			}; break;
 
 			default:
+				ESP_LOGD(TAG, "< %X seq=%u len=%u crc=%04x", this->packet_.pid, this->packet_.seq, (this->packet_.len - offsetof(MCUPacket, payload) - sizeof(crc_in)), crc_in);
 				ESP_LOGW(TAG, "Unknown packet: %x (node %x)", this->packet_.pid, this->packet_.payload[0]);
-				uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len)), ' ');
+				uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len + sizeof(crc_in))), ' ');
 		}
 	}
 }
