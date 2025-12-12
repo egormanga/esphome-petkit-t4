@@ -347,8 +347,8 @@ interval:
                 id: auto_weight_zero_done
                 value: 'true'
             - globals.set:
-              id: auto_weight_zero_set_at
-              value: !lambda return (long) millis();
+                id: auto_weight_zero_set_at
+                value: !lambda return (long) millis();
             - logger.log:
                 level: INFO
                 format: "Auto weight zero calibrated (raw=%d)"
