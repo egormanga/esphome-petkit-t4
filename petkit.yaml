@@ -256,6 +256,18 @@ globals:
     initial_value: '-1/65536.f'
     restore_value: true
 
+  - id: auto_weight_zero_done
+    type: bool
+    initial_value: 'false'
+
+  - id: auto_weight_zero_last_raw
+    type: int
+    initial_value: '0'
+
+  - id: auto_weight_zero_stable
+    type: int
+    initial_value: '0'
+
   - id: litter_mass
     type: float
     restore_value: true
@@ -282,6 +294,58 @@ globals:
 
   - id: cleaned_at
     type: long
+
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              if (id(auto_weight_zero_done)) return false;
+
+              // Only auto-zero when the unit is idle and open (same safety gate used by other config actions).
+              if (id(clean).state || id(maintenance).state) {
+                id(auto_weight_zero_last_raw) = 0;
+                id(auto_weight_zero_stable) = 0;
+                return false;
+              }
+              if (id(approach).state || id(pet_inside).state) {
+                id(auto_weight_zero_last_raw) = 0;
+                id(auto_weight_zero_stable) = 0;
+                return false;
+              }
+              if (id(cover).state) {
+                id(auto_weight_zero_last_raw) = 0;
+                id(auto_weight_zero_stable) = 0;
+                return false;
+              }
+
+              const int raw = (int) id(weight).raw_state;
+              const int last = id(auto_weight_zero_last_raw);
+              id(auto_weight_zero_last_raw) = raw;
+              if (last == 0) {
+                id(auto_weight_zero_stable) = 0;
+                return false;
+              }
+
+              const int diff = abs(raw - last);
+              // Raw units are MCU-provided 24-bit counts; threshold is intentionally conservative.
+              if (diff <= 2500) id(auto_weight_zero_stable) += 1;
+              else id(auto_weight_zero_stable) = 0;
+
+              // 10 consecutive stable seconds.
+              return id(auto_weight_zero_stable) >= 10;
+          then:
+            - globals.set:
+                id: weight_zero
+                value: !lambda return (int) id(weight).raw_state;
+            - globals.set:
+                id: auto_weight_zero_done
+                value: 'true'
+            - logger.log:
+                level: INFO
+                format: "Auto weight zero calibrated (raw=%d)"
+                args: ['(int) id(weight).raw_state']
 
 pkt4_mcu:
 
