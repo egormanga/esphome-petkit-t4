@@ -607,7 +607,7 @@ binary_sensor:
       id: drum_level
       name: Drum Level
       entity_category: diagnostic
-      trigger_on_initial_state: true
+      publish_initial_state: true
       on_press:
         globals.set:
           id: level_needed
@@ -644,7 +644,7 @@ binary_sensor:
       name: Tray
       entity_category: diagnostic
       disabled_by_default: true
-      trigger_on_initial_state: true
+      publish_initial_state: true
       on_state:
         pkt4_mcu.motor:
           motor: tray
@@ -742,7 +742,7 @@ binary_sensor:
     pin:
       number: GPIO22
       allow_other_uses: true
-    trigger_on_initial_state: true
+    publish_initial_state: true
     on_press:  # ready
       pkt4_mcu.init:
     on_release:  # reset
