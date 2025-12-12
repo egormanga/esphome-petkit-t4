@@ -268,6 +268,10 @@ globals:
     type: int
     initial_value: '0'
 
+  - id: auto_weight_zero_set_at
+    type: long
+    initial_value: '0'
+
   - id: litter_mass
     type: float
     restore_value: true
@@ -342,6 +346,9 @@ interval:
             - globals.set:
                 id: auto_weight_zero_done
                 value: 'true'
+            - globals.set:
+              id: auto_weight_zero_set_at
+              value: !lambda return (long) millis();
             - logger.log:
                 level: INFO
                 format: "Auto weight zero calibrated (raw=%d)"
@@ -350,6 +357,29 @@ interval:
 pkt4_mcu:
 
 sensor:
+  - platform: template
+    id: weight_zero_raw
+    name: Weight Zero Raw
+    icon: mdi:counter
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: return (float) id(weight_zero);
+
+  - platform: template
+    id: auto_weight_zero_age
+    name: Auto Weight Zero Age
+    icon: mdi:timer-outline
+    entity_category: diagnostic
+    unit_of_measurement: s
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (!id(auto_weight_zero_done)) return {};
+      long elapsed = (long) millis() - id(auto_weight_zero_set_at);
+      if (elapsed < 0) elapsed = 0;
+      return (float) (elapsed / 1000L);
+
   - platform: pkt4_mcu
     distance:
       name: Distance
@@ -540,6 +570,13 @@ sensor:
     disabled_by_default: true
 
 binary_sensor:
+  - platform: template
+    id: auto_weight_zero_done_entity
+    name: Auto Weight Zero Done
+    icon: mdi:scale-balance
+    entity_category: diagnostic
+    lambda: return id(auto_weight_zero_done);
+
   - platform: pkt4_mcu
     approach:
       id: approach
