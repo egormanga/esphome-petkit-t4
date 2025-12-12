@@ -48,6 +48,19 @@ It's able to work completely offline & without HA, although it's recommended to 
 7. Rinse, repeat as desired (a perfect 0.01 kg precision is known to be reachable on T4).
 
 
+## Automatic Calibration (No Reference Weight)
+
+Absolute scale calibration (getting the exact kg/grams factor) fundamentally requires *some* known reference mass.
+However, for most real-world use of this firmware (pet presence detection, safety checks, and relative weight changes), the important part is keeping the scale **zero/tare** correct.
+
+This repo now includes an **auto-zero** routine that does not require placing any reference weight:
+
+- It waits for the unit to be idle and stable (no clean/maintenance running, no pet/approach, cover removed).
+- After ~10 seconds of stable raw readings, it automatically sets the `weight_zero` offset.
+
+If you still need maximum absolute accuracy (e.g. precise pet weight to 0.01 kg), you can optionally perform the manual reference-weight step to refine `weight_scale`.
+
+
 ## Thanks to:
 
 - @earlynerd with his [repo](https://github.com/earlynerd/petkit-pura-max-serial-bus) for the pioneering and _enormous_ help in the reverse engineering.
