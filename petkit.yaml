@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.10.2
+    version: 0.10.3
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -564,9 +564,12 @@ binary_sensor:
               - binary_sensor.is_off: pet_inside
               - binary_sensor.is_off: cover
             then:
-              globals.set:
-                id: waste_collected
-                value: !lambda return min(id(waste_pending), max(0.f, (max(0.f, id(weight).state) - id(litter_mass))));
+              - globals.set:
+                  id: waste_collected
+                  value: !lambda return id(waste_pending);
+              - globals.set:
+                  id: waste_pending
+                  value: '0'
         - globals.set:
             id: level_needed
             value: 'true'
@@ -1029,7 +1032,7 @@ number:
     entity_category: config
     unit_of_measurement: min
     mode: box
-    min_value: 1
+    min_value: 0
     max_value: 60
     step: 1
     optimistic: true
