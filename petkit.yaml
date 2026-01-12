@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.10.3
+    version: 0.10.4
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -240,7 +240,11 @@ display:
     } else if (!id(wifi_).is_connected()) {
       static uint8_t ii = 0;
       uint8_t scale = (min(it.get_width(), it.get_height()) / id(qrcode_ap).get_size());
-      it.qr_code((++ii/8 % (it.get_width() - id(qrcode_ap).get_size()*scale)), (ii/8 / (it.get_height() - id(qrcode_ap).get_size()*scale)), id(qrcode_ap), COLOR_ON, scale);
+      unsigned width = (it.get_width() - id(qrcode_ap).get_size()*scale),
+               height = (it.get_height() - id(qrcode_ap).get_size()*scale),
+               x = (++ii/8 % width),
+               y = (ii/8 / height);
+      it.qr_code(y%2?width-x:x, y, id(qrcode_ap), COLOR_ON, scale);
     }
 
     clip = 0;
