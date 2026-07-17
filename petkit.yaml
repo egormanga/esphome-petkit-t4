@@ -27,7 +27,7 @@ wifi:
   id: wifi_
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  fast_connect: true
+  fast_connect: on
   ap:
     ssid: !secret ap_ssid
     password: !secret ap_password
@@ -81,16 +81,16 @@ power_supply:
   - id: vreg_display
     pin:
       number: GPIO2
-      ignore_strapping_warning: true
-    enable_on_boot: true
+      ignore_strapping_warning: yes
+    enable_on_boot: yes
 
   - id: vreg_bus
     pin: GPIO26
-    enable_on_boot: true
+    enable_on_boot: yes
 
   - id: vreg_bus_rev2
     pin: GPIO27
-    enable_on_boot: true
+    enable_on_boot: yes
 
 output:
   - platform: ledc
@@ -100,9 +100,9 @@ output:
 i2c:
   sda:
     number: GPIO15
-    ignore_strapping_warning: true
+    ignore_strapping_warning: yes
   scl: GPIO4
-  scan: false
+  scan: no
 
 spi:
   mosi_pin: GPIO23
@@ -196,7 +196,7 @@ display:
   model: 'SH1107 128x128'
   cs_pin:
     number: GPIO5
-    ignore_strapping_warning: true
+    ignore_strapping_warning: yes
   dc_pin: GPIO19
   reset_pin: GPIO17
   data_rate: 40MHz  # max
@@ -251,24 +251,24 @@ globals:
   - id: weight_zero
     type: int
     initial_value: '7975680'
-    restore_value: true
+    restore_value: yes
 
   - id: weight_scale
     type: float
     initial_value: '-1/65536.f'
-    restore_value: true
+    restore_value: yes
 
   - id: litter_mass
     type: float
-    restore_value: true
+    restore_value: yes
 
   - id: waste_collected
     type: float
-    restore_value: true
+    restore_value: yes
 
   - id: litter_discarded
     type: float
-    restore_value: true
+    restore_value: yes
 
   - id: waste_pending
     type: float
@@ -292,7 +292,7 @@ sensor:
     distance:
       name: Distance
       entity_category: diagnostic
-      disabled_by_default: true
+      disabled_by_default: yes
       filters:
         - calibrate_polynomial:
             degree: 3
@@ -310,7 +310,7 @@ sensor:
       name: Weight
       icon: mdi:scale
       entity_category: diagnostic
-      disabled_by_default: true
+      disabled_by_default: yes
       filters:
         - offset: !lambda return -id(weight_zero);
         - multiply: !lambda return id(weight_scale);
@@ -404,7 +404,7 @@ sensor:
       - throttle: 10s
       - clamp:
           min_value: 1 #!lambda return id(pet_threshold).state;
-          ignore_out_of_range: true
+          ignore_out_of_range: yes
       - filter_out: 0
       - skip_initial: 1
 
@@ -443,14 +443,14 @@ sensor:
     icon: mdi:counter
     accuracy_decimals: 0
     entity_category: diagnostic
-    disabled_by_default: true
+    disabled_by_default: yes
     update_interval: 1s
     lambda: return id(cleans_left);
 
   - platform: adc
     name: 3V3
     entity_category: diagnostic
-    disabled_by_default: true
+    disabled_by_default: yes
     pin: GPIO32
     attenuation: 12dB
     filters:
@@ -460,19 +460,19 @@ sensor:
     id: mcu_interrupts
     pin:
       number: GPIO22
-      allow_other_uses: true
+      allow_other_uses: yes
     internal_filter: 0s
     total:
       name: MCU Interrupts
       entity_category: diagnostic
-      disabled_by_default: true
+      disabled_by_default: yes
 
   - platform: uptime
     id: sensor_uptime
     name: Uptime
     icon: mdi:clock-start
     entity_category: diagnostic
-    disabled_by_default: true
+    disabled_by_default: yes
 
 binary_sensor:
   - platform: pkt4_mcu
@@ -595,7 +595,7 @@ binary_sensor:
       id: drum_level
       name: Drum Level
       entity_category: diagnostic
-      trigger_on_initial_state: true
+      trigger_on_initial_state: yes
       on_press:
         globals.set:
           id: level_needed
@@ -631,8 +631,8 @@ binary_sensor:
       id: tray
       name: Tray
       entity_category: diagnostic
-      disabled_by_default: true
-      trigger_on_initial_state: true
+      disabled_by_default: yes
+      trigger_on_initial_state: yes
       on_state:
         pkt4_mcu.motor:
           motor: tray
@@ -700,7 +700,7 @@ binary_sensor:
     entity_category: diagnostic
     pin:
       number: GPIO34
-      inverted: true
+      inverted: yes
     on_double_click:
       if:
         condition:
@@ -718,19 +718,19 @@ binary_sensor:
     entity_category: diagnostic
     pin:
       number: GPIO0
-      inverted: true
-      ignore_strapping_warning: true
+      inverted: yes
+      ignore_strapping_warning: yes
     on_click:
       button.press: level
 
   - platform: gpio
     name: MCU
     entity_category: diagnostic
-    disabled_by_default: true
+    disabled_by_default: yes
     pin:
       number: GPIO22
-      allow_other_uses: true
-    trigger_on_initial_state: true
+      allow_other_uses: yes
+    trigger_on_initial_state: yes
     on_press:  # ready
       pkt4_mcu.init:
     on_release:  # reset
@@ -794,19 +794,19 @@ button:
   - platform: safe_mode
     name: Restart Safe Mode
     entity_category: diagnostic
-    disabled_by_default: true
+    disabled_by_default: yes
 
   - platform: factory_reset
     name: Factory Reset
     entity_category: config
-    disabled_by_default: true
+    disabled_by_default: yes
 
 switch:
   - platform: template
     id: clean
     name: Clean
     icon: mdi:recycle
-    optimistic: true
+    optimistic: yes
     restore_mode: disabled
     turn_on_action:
       if:
@@ -866,7 +866,7 @@ switch:
     id: maintenance
     name: Maintenance
     icon: mdi:progress-wrench
-    optimistic: true
+    optimistic: yes
     restore_mode: disabled
     turn_on_action:
       if:
@@ -919,7 +919,7 @@ switch:
     name: Auto Clean
     icon: mdi:refresh-auto
     entity_category: config
-    optimistic: true
+    optimistic: yes
     restore_mode: restore_default_off  # better safe than sorry!
     on_turn_on:
       script.execute: auto_clean
@@ -929,7 +929,7 @@ switch:
     name: Block Movement
     icon: mdi:lock-reset
     entity_category: diagnostic
-    optimistic: true
+    optimistic: yes
     restore_mode: restore_default_off
     on_turn_on:
       - pkt4_mcu.motor:
@@ -946,7 +946,7 @@ switch:
     name: Tray
     icon: mdi:stack-overflow
     entity_category: diagnostic
-    optimistic: false
+    optimistic: no
     restore_mode: disabled
     lambda: return id(tray).state;
     turn_on_action:
@@ -978,7 +978,7 @@ switch:
     name: Drum Down
     icon: mdi:horizontal-rotate-counterclockwise
     entity_category: diagnostic
-    optimistic: true
+    optimistic: yes
     restore_mode: disabled
     turn_on_action:
       if:
@@ -1008,7 +1008,7 @@ switch:
     name: Drum Up
     icon: mdi:horizontal-rotate-clockwise
     entity_category: diagnostic
-    optimistic: true
+    optimistic: yes
     restore_mode: disabled
     turn_on_action:
       if:
@@ -1044,8 +1044,8 @@ number:
     min_value: 0
     max_value: 60
     step: 1
-    optimistic: true
-    restore_value: true
+    optimistic: yes
+    restore_value: yes
     initial_value: 1
 
   - platform: template
@@ -1058,8 +1058,8 @@ number:
     min_value: 10
     max_value: 100
     step: 5
-    optimistic: true
-    restore_value: true
+    optimistic: yes
+    restore_value: yes
     initial_value: 25
 
   - platform: template
@@ -1070,8 +1070,8 @@ number:
     min_value: 1
     max_value: 5
     step: 1
-    optimistic: true
-    restore_value: true
+    optimistic: yes
+    restore_value: yes
     initial_value: 1
 
   - platform: template
@@ -1084,8 +1084,8 @@ number:
     min_value: 0.10
     max_value: 10.00
     step: 0.10
-    optimistic: true
-    restore_value: true
+    optimistic: yes
+    restore_value: yes
     initial_value: 1.00
 
   - platform: template
@@ -1098,8 +1098,8 @@ number:
     min_value: 1.00
     max_value: 5.00
     step: 0.10
-    optimistic: true
-    restore_value: true
+    optimistic: yes
+    restore_value: yes
     initial_value: 2.00
 
   - platform: template
@@ -1112,8 +1112,8 @@ number:
     min_value: 0.10
     max_value: 2.00
     step: 0.10
-    optimistic: true
-    restore_value: true
+    optimistic: yes
+    restore_value: yes
     initial_value: 1.00
 
   - platform: template
