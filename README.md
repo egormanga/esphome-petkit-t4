@@ -10,8 +10,8 @@ It's able to work completely offline & without HA, although it's recommended to 
 
 ## Extra features added
 
-- Top (menu) button: Maintenance mode / Reboot
-- Bottom (ok) button: Maintenance done & Level the litter
+- Top (menu) button: Maintenance mode (double click) / Reboot (hold)
+- Bottom (ok) button: Maintenance done / Level the litter
 - Advanced status displaying
 - Quieter functioning
 - Collected waste amount tracking

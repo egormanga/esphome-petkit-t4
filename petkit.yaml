@@ -784,7 +784,7 @@ button:
         then:
           globals.set:
             id: weight_zero
-            value: !lambda return id(weight).raw_state;
+            value: !lambda return id(weight).get_raw_state();
 
   - platform: restart
     name: Restart
@@ -1133,7 +1133,7 @@ number:
         then:
           globals.set:
             id: weight_scale
-            value: !lambda return ((float)x / (id(weight).raw_state - id(weight_zero)));
+            value: !lambda return ((float)x / (id(weight).get_raw_state() - id(weight_zero)));
 
 script:
   - id: level_if_needed
