@@ -369,9 +369,9 @@ sensor:
     name: Pet Weight
     icon: mdi:paw
     unit_of_measurement: kg
+    accuracy_decimals: 2
     device_class: weight
     state_class: measurement
-    accuracy_decimals: 2
     update_interval: 1s
     lambda: return (max(0.f, id(weight).state) - id(litter_mass) - id(waste_collected));
     on_value_range:
@@ -391,9 +391,9 @@ sensor:
     name: Pet Body Mass
     icon: mdi:scale-bathroom
     unit_of_measurement: kg
+    accuracy_decimals: 1
     device_class: weight
     state_class: measurement
-    accuracy_decimals: 1
     update_interval: 1s
     lambda: |-
       if (id(pet_inside).state) return id(pet_weight).state;
@@ -412,9 +412,9 @@ sensor:
     name: Litter Mass
     icon: mdi:bucket
     unit_of_measurement: g
+    accuracy_decimals: 0
     device_class: weight
     state_class: measurement
-    accuracy_decimals: 0
     update_interval: 1s
     lambda: return id(litter_mass)*1000;
 
@@ -422,9 +422,9 @@ sensor:
     name: Waste Collected
     icon: mdi:liquid-spot
     unit_of_measurement: g
+    accuracy_decimals: 0
     device_class: weight
     state_class: measurement
-    accuracy_decimals: 0
     update_interval: 1s
     lambda: return id(waste_collected)*1000;
 
@@ -432,9 +432,9 @@ sensor:
     name: Litter Discarded
     icon: mdi:delete-variant
     unit_of_measurement: kg
+    accuracy_decimals: 2
     device_class: weight
     state_class: total_increasing
-    accuracy_decimals: 2
     update_interval: 1s
     lambda: return id(litter_discarded);
 
