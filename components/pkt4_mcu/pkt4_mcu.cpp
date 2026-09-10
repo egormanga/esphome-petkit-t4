@@ -200,6 +200,12 @@ void PKT4MCUComponent::loop() {
 				uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len + sizeof(crc_in))), ' ');
 		}
 	}
+    for (uint8_t i = 0; i < 2; ++i) {
+        if (motor_active_[i] && (!movement_allowed_ || !movement_allowed_() ||
+            uint32_t(millis() - motor_started_[i]) > motor_window_[i]))
+            motor(i, 2, 0, 0, 0, 0);
+    }
+
 }
 
 void PKT4MCUComponent::init() {
@@ -212,6 +218,16 @@ void PKT4MCUComponent::deinit() {
 }
 
 void PKT4MCUComponent::motor(uint8_t motor, uint8_t mode, uint8_t direction, uint8_t speed, uint16_t duration, uint16_t timeout) {
+    if (motor > 1) return;
+    if (mode != 2 && (!movement_allowed_ || !movement_allowed_())) {
+        ESP_LOGW(TAG, "Movement blocked by safety interlock");
+        return;
+    }
+    motor_active_[motor] = mode != 2;
+    motor_started_[motor] = millis();
+    // Independent two-minute ceiling; the MCU retains its configured timeout.
+    motor_window_[motor] = 120000;
+
 	struct __attribute__((packed)) {
 		uint8_t motor,
 		        mode,

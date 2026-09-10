@@ -50,34 +50,16 @@ CONFIG_SCHEMA = cv.Schema({
 
 
 async def to_code(config):
-	var = await cg.get_variable(config[CONF_ID])
+    var = await cg.get_variable(config[CONF_ID])
 
-	# Dependency order
-
-	if tray_config := config.get(CONF_TRAY):
-		sens = await binary_sensor.new_binary_sensor(tray_config)
-		cg.add(var.set_tray_sensor(sens))
-
-	if cover_config := config.get(CONF_COVER):
-		sens = await binary_sensor.new_binary_sensor(cover_config)
-		cg.add(var.set_cover_sensor(sens))
-
-	if drum_up_config := config.get(CONF_DRUM_UP):
-		sens = await binary_sensor.new_binary_sensor(drum_up_config)
-		cg.add(var.set_drum_up_sensor(sens))
-
-	if drum_down_config := config.get(CONF_DRUM_DOWN):
-		sens = await binary_sensor.new_binary_sensor(drum_down_config)
-		cg.add(var.set_drum_down_sensor(sens))
-
-	if bin_config := config.get(CONF_BIN):
-		sens = await binary_sensor.new_binary_sensor(bin_config)
-		cg.add(var.set_bin_sensor(sens))
-
-	if drum_level_config := config.get(CONF_DRUM_LEVEL):
-		sens = await binary_sensor.new_binary_sensor(drum_level_config)
-		cg.add(var.set_drum_level_sensor(sens))
-
-	if approach_config := config.get(CONF_APPROACH):
-		sens = await binary_sensor.new_binary_sensor(approach_config)
-		cg.add(var.set_approach_sensor(sens))
+    # Allocate every entity before building automations: callbacks may reference
+    # other sensors in this same platform, regardless of declaration order.
+    sensors = []
+    for key in (CONF_TRAY, CONF_COVER, CONF_DRUM_UP, CONF_DRUM_DOWN,
+                CONF_BIN, CONF_DRUM_LEVEL, CONF_APPROACH):
+        if sensor_config := config.get(key):
+            sens = cg.new_Pvariable(sensor_config[CONF_ID])
+            cg.add(getattr(var, f"set_{key}_sensor")(sens))
+            sensors.append((sens, sensor_config))
+    for sens, sensor_config in sensors:
+        await binary_sensor.register_binary_sensor(sens, sensor_config)
