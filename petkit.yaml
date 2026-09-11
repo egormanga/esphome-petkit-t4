@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.11.3
+    version: 0.11.4
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
