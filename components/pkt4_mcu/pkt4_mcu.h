@@ -45,6 +45,8 @@ class PKT4MCUComponent: public Component, public uart::UARTDevice {
 		uint8_t hw_ver_,
 		        sw_ver_;
 		bool inited_{false};
+        size_t rx_size_{0};
+        uint32_t rx_last_{0};
 		MCUPacket packet_;
 		uint8_t seq_{0};
 
