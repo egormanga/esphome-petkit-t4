@@ -8,7 +8,7 @@ esphome:
   friendly_name: Petkit T4
   project:
     name: egormanga.esphome-petkit-t4
-    version: 0.11.3
+    version: 0.11.4
   platformio_options:
     board_upload.maximum_size: 0x800000
   #on_boot:
@@ -208,7 +208,7 @@ display:
     static uint16_t clip = 0;
 
     if (id(ota_state)) it.image(it.get_width()/2, it.get_height()/2, id(icon_ota), ImageAlign::CENTER);
-    else if (id(clean).state || (id(maintenance).state && millis() % 5000 < 1500) || (id(level_needed) && (!id(maintenance)))) {
+    else if (id(clean).state || (id(maintenance).state && millis() % 5000 < 1500) || (id(level_needed) && (!id(maintenance).state))) {
       BaseImage *icon = id(approach).state?id(icon_problem):
                         id(clean).state?id(icon_clean):
                         id(maintenance).state?id(icon_maintenance):
