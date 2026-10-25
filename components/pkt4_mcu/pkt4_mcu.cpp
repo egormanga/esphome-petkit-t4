@@ -57,6 +57,18 @@ void PKT4MCUComponent::loop() {
 		} *node = (struct node*)this->packet_.payload;
 
 		switch (this->packet_.pid) {
+			case 0x0: {
+				if (this->packet_.len != offsetof(MCUPacket, payload) + 2 + sizeof(crc_in)) {
+					ESP_LOGW(TAG, "Invalid heartbeat length: %u", this->packet_.len);
+					break;
+				}
+				if (node->node != 0x0) {
+					ESP_LOGW(TAG, "Unknown heartbeat node: %x (raw %02x)", node->node, this->packet_.payload[0]);
+					break;
+				}
+				ESP_LOGV(TAG, "MCU heartbeat: seq=%u value=0x%02X", this->packet_.seq, node->data[0]);
+			}; break;
+
 			case 0x1: {
 				switch (node->node) {
 					case 0x0: {
@@ -196,8 +208,8 @@ void PKT4MCUComponent::loop() {
 
 			default:
 				ESP_LOGD(TAG, "< %X seq=%u len=%u crc=%04x", this->packet_.pid, this->packet_.seq, (this->packet_.len - offsetof(MCUPacket, payload) - sizeof(crc_in)), crc_in);
-				ESP_LOGW(TAG, "Unknown packet: %x (node %x)", this->packet_.pid, this->packet_.payload[0]);
-				uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len + sizeof(crc_in))), ' ');
+				ESP_LOGW(TAG, "Unknown packet: %x (node %x, raw %02x)", this->packet_.pid, node->node, this->packet_.payload[0]);
+				uart::UARTDebug::log_hex(uart::UART_DIRECTION_RX, std::vector<uint8_t>((uint8_t*)&this->packet_, ((uint8_t*)&this->packet_ + this->packet_.len)), ' ');
 		}
 	}
 }
